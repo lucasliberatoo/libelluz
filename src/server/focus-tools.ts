@@ -7,10 +7,11 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { getDb, schema } from "@/db";
 import { dayOf } from "@/lib/day";
+import { HEAT } from "@/lib/heat";
 
 // Atalhos da tela de Foco: água, notas, insights, áudios e checklist da sessão.
 
-const { focusNotes, focusSessions, habitLogs, users } = schema;
+const { focusNotes, focusSessions, habitLogs, heatEvents, users } = schema;
 
 async function requireUser() {
   const s = await auth();
@@ -51,6 +52,19 @@ export async function addWaterCup() {
   const u = await db.query.users.findFirst({ where: eq(users.id, userId), columns: { waterGoal: true } });
   revalidatePath("/");
   return { cups: row.cups, goal: u?.waterGoal ?? 8 };
+}
+
+/** Calor do foguinho pela pausa de respirar ou alongar (+2, uma vez por dia cada). Devolve o calor dado. */
+export async function addWellnessHeat(kind: "breath" | "stretch") {
+  const userId = await requireUser();
+  const k = z.enum(["breath", "stretch"]).parse(kind);
+  const day = dayOf();
+  const res = await getDb()
+    .insert(heatEvents)
+    .values({ userId, day, amount: HEAT[k], reason: k, dedupe: `${k}:${day}` })
+    .onConflictDoNothing()
+    .returning({ id: heatEvents.id });
+  return res.length ? HEAT[k] : 0;
 }
 
 async function ownSession(userId: string, sessionId: string) {

@@ -10,10 +10,12 @@ const ITEMS = [
   { href: "/cronograma", label: "Cronograma", emoji: "🗓️" },
   { href: "/mapa", label: "Mapa", emoji: "🗺️" },
   { href: "/estatisticas", label: "Estatísticas", emoji: "📊" },
+  { href: "/conquistas", label: "Conquistas", emoji: "🏆" },
   { href: "/diario", label: "Diário e humor", emoji: "📔" },
   { href: "/foco/notas", label: "Notas do foco", emoji: "📌" },
   { href: "/perfil", label: "Perfil", emoji: "🙂" },
   { href: "/config", label: "Configurações", emoji: "⚙️" },
+  { href: "/disciplina", label: "Modo Disciplina", emoji: "🔒" },
   { href: "/baixar", label: "Baixar o app", emoji: "📲" },
 ];
 

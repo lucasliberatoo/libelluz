@@ -4,9 +4,11 @@ import { hasDatabase } from "@/db";
 import { nowMs } from "@/lib/day";
 import { FocusProvider } from "@/components/focus/focus-provider";
 import { AppShell } from "@/components/shell/app-shell";
+import { Celebrate } from "@/components/celebrate/celebrate";
 import { SetupNeeded } from "@/components/setup-needed";
 import { getActiveFocus, getShellData } from "@/server/queries";
 import { ensureDailyLogin } from "@/server/xp";
+import { unreadCount } from "@/server/notifications";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   if (!hasDatabase()) return <SetupNeeded />;
@@ -14,11 +16,11 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const userId = session?.user?.id;
   if (!userId) redirect("/entrar");
   // o XP do login entra antes de somar as moedas do topo; a sessão de foco vem em paralelo
-  const [shell, active] = await Promise.all([ensureDailyLogin(userId).then(() => getShellData(userId)), getActiveFocus(userId)]);
+  const [shell, active, unread] = await Promise.all([ensureDailyLogin(userId).then(() => getShellData(userId)), getActiveFocus(userId), unreadCount(userId)]);
   const serverNow = active?.pausedAt ?? nowMs();
   return (
     <FocusProvider initial={active} serverNow={serverNow}>
-      <AppShell user={shell}>{children}</AppShell>
+      <AppShell user={{ ...shell, unread }}>{children}<Celebrate userId={userId} /></AppShell>
     </FocusProvider>
   );
 }

@@ -42,6 +42,12 @@ export const users = pgTable("users", {
   // Redação: "fixo" (sorteia no dia escolhido) ou "semana" (tema da semana, sorteado na segunda)
   essayRhythm: text("essay_rhythm").notNull().default("semana"),
   essayDay: integer("essay_day").notNull().default(6),
+  // Fase 3
+  petAccessory: text("pet_accessory"), // acessório equipado no foguinho
+  privacy: jsonb("privacy").$type<{ hideAccuracy?: boolean; hideHours?: boolean; hideFeed?: boolean; hideStudyingNow?: boolean }>().notNull().default({}),
+  notifPrefs: jsonb("notif_prefs").$type<{ off?: string[]; quietStart?: number; quietEnd?: number }>().notNull().default({}),
+  achievementsCheckedAt: timestamp("achievements_checked_at", { mode: "date" }),
+  lastLevelSeen: integer("last_level_seen").notNull().default(1),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 
@@ -412,4 +418,184 @@ export const focusNotes = pgTable(
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [index("focus_notes_session_idx").on(t.sessionId), index("focus_notes_user_idx").on(t.userId)],
+);
+
+/* ---------- Fase 3: foguinho, conquistas, grupos, notificações ---------- */
+
+// Calor do foguinho que não dá para derivar do histórico (ex.: pausa de respiração).
+export const heatEvents = pgTable(
+  "heat_events",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    day: date("day").notNull(),
+    amount: integer("amount").notNull(),
+    reason: text("reason").notNull(),
+    dedupe: text("dedupe"),
+    at: timestamp("at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("heat_user_day_idx").on(t.userId, t.day), uniqueIndex("heat_dedupe_idx").on(t.userId, t.dedupe)],
+);
+
+export const achievements = pgTable(
+  "achievements",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    tier: integer("tier").notNull().default(1), // estrelas (1–3)
+    unlockedAt: timestamp("unlocked_at", { mode: "date" }).notNull().defaultNow(),
+    seenAt: timestamp("seen_at", { mode: "date" }),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.key, t.tier] })],
+);
+
+// Posts manuais do feed (as sessões de foco e conquistas entram no feed direto das suas tabelas).
+export const feedPosts = pgTable(
+  "feed_posts",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    text: text("text"),
+    photo: text("photo"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("feed_posts_created_idx").on(t.createdAt)],
+);
+
+// Alvo de reação/comentário: "session" (focus_sessions.id), "post" (feed_posts.id) ou "achievement" ("userId:key:tier").
+export const feedReactions = pgTable(
+  "feed_reactions",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    targetKind: text("target_kind").notNull(),
+    targetId: text("target_id").notNull(),
+    emoji: text("emoji").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.targetKind, t.targetId, t.emoji] }), index("reactions_target_idx").on(t.targetKind, t.targetId)],
+);
+
+export const feedComments = pgTable(
+  "feed_comments",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    targetKind: text("target_kind").notNull(),
+    targetId: text("target_id").notNull(),
+    text: text("text").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("comments_target_idx").on(t.targetKind, t.targetId)],
+);
+
+export const pokes = pgTable(
+  "pokes",
+  {
+    id: id(),
+    fromId: text("from_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    toId: text("to_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    day: date("day").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("pokes_once_a_day_idx").on(t.fromId, t.toId, t.day)],
+);
+
+// Missões cooperativas (grupo inteiro ou dupla).
+export const missions = pgTable("missions", {
+  id: id(),
+  title: text("title").notNull(),
+  metric: text("metric", { enum: ["hours", "questions", "sessions", "days"] }).notNull(),
+  target: real("target").notNull(),
+  startDay: date("start_day").notNull(),
+  endDay: date("end_day").notNull(),
+  // vazio = grupo inteiro; com ids = dupla/trio
+  memberIds: jsonb("member_ids").$type<string[]>().notNull().default([]),
+  xp: integer("xp").notNull().default(100),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull().unique(),
+    p256dh: text("p256dh"),
+    auth: text("auth"),
+    platform: text("platform").notNull().default("web"), // web | android
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("push_user_idx").on(t.userId)],
+);
+
+// Caixa de notificações (o sino). O push é só a entrega; tudo fica registrado aqui.
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    url: text("url"),
+    dedupe: text("dedupe"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    readAt: timestamp("read_at", { mode: "date" }),
+    pushedAt: timestamp("pushed_at", { mode: "date" }),
+  },
+  (t) => [index("notifications_user_idx").on(t.userId, t.createdAt), uniqueIndex("notifications_dedupe_idx").on(t.userId, t.dedupe)],
+);
+
+/* ---------- Modo Disciplina (bloqueio de apps no APK) ---------- */
+
+// Uma linha por pessoa: os apps escolhidos e as regras dos tokens.
+export const disciplineSettings = pgTable("discipline_settings", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").notNull().default(false),
+  // [{ pkg: "com.instagram.android", label: "Instagram" }]
+  apps: jsonb("apps").$type<{ pkg: string; label: string }[]>().notNull().default([]),
+  baseTokens: integer("base_tokens").notNull().default(3),
+  minutesPerToken: integer("minutes_per_token").notNull().default(10),
+  blockNotifications: boolean("block_notifications").notNull().default(true),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+// Log de uso: um registro por token gasto. `clientId` é o id gerado no celular (evita duplicar
+// quando a fila é sincronizada duas vezes).
+export const tokenSpends = pgTable(
+  "token_spends",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    day: date("day").notNull(),
+    at: timestamp("at", { mode: "date" }).notNull().defaultNow(),
+    pkg: text("pkg").notNull(),
+    label: text("label").notNull(),
+    minutes: integer("minutes").notNull(),
+    clientId: text("client_id").notNull(),
+  },
+  (t) => [index("spends_user_day_idx").on(t.userId, t.day), uniqueIndex("spends_client_idx").on(t.userId, t.clientId)],
 );

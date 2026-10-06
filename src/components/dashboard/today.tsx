@@ -2,14 +2,19 @@
 
 import Link from "next/link";
 import { createContext, useContext, useOptimistic, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { DASH_TABS, tabHref, type DashTab } from "./tabs";
+import { TabSkeleton } from "./tab-skeleton";
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { Camera, Check, Pencil, Play, Plus, RotateCcw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Foguinho, Icon3D } from "@/components/brand";
+import { StreakCard } from "@/components/pet/streak-card";
+import type { PetSummary } from "@/server/pet";
 import type { DashboardData } from "@/server/queries";
 import { addTask, deleteTask, setHabit, toggleTask } from "@/server/actions";
 
-const DashCtx = createContext<DashboardData | null>(null);
+const DashCtx = createContext<(DashboardData & { pet?: PetSummary | null }) | null>(null);
 const useDash = () => useContext(DashCtx)!;
 
 const areaColor: Record<string, string> = {
@@ -28,41 +33,57 @@ const areaBar: Record<string, string> = {
 };
 const fmtH = (n: number) => String(n).replace(".", ",");
 
-const TABS = ["Hoje", "Semana", "Jornada", "Ranking & Conquistas"] as const;
-
-export function Dashboard({ data }: { data: DashboardData }) {
-  const [tab, setTab] = useState<(typeof TABS)[number]>("Hoje");
+export function Dashboard({
+  data,
+  pet,
+  tab = "Hoje",
+  panel,
+}: {
+  data: DashboardData;
+  pet?: PetSummary | null;
+  tab?: DashTab;
+  panel?: React.ReactNode;
+}) {
+  // abas pela URL (?aba=): a aba aparece marcada na hora e o conteúdo chega do servidor
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [shown, setShown] = useOptimistic(tab);
+  const go = (t: DashTab) =>
+    start(() => {
+      setShown(t);
+      router.replace(tabHref(t), { scroll: false });
+    });
   return (
-    <DashCtx.Provider value={data}>
+    <DashCtx.Provider value={{ ...data, pet }}>
     <div className="space-y-4 md:space-y-6">
       <ProgressHeader />
       <section className="card-soft relative p-3 md:p-5">
         <PetPeek />
-        <div className="no-scrollbar -mx-3 mb-4 flex gap-2 overflow-x-auto px-3 pr-16 md:mx-0 md:px-0 md:pr-24">
-          {TABS.map((t) => (
+        <div className="mb-4 grid grid-cols-4 gap-1.5 md:flex md:gap-2 md:pr-24">
+          {DASH_TABS.map((t) => (
             <button
               key={t}
-              onClick={() => setTab(t)}
+              onClick={() => go(t)}
+              aria-pressed={t === shown}
               className={cn(
-                "whitespace-nowrap rounded-full border-2 px-4 py-1 text-sm font-semibold transition-colors",
-                t === tab
+                "min-w-0 whitespace-nowrap rounded-full border-2 px-1 py-1 text-[13px] font-semibold transition-colors md:px-4 md:text-sm",
+                t === shown
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-primary/70 bg-card text-primary hover:bg-accent",
               )}
             >
-              {t}
+              {t === "Ranking & Conquistas" ? (
+                <>
+                  <span className="md:hidden">Ranking</span>
+                  <span className="hidden md:inline">{t}</span>
+                </>
+              ) : (
+                t
+              )}
             </button>
           ))}
         </div>
-        {tab === "Hoje" ? (
-          <TodayTab />
-        ) : (
-          <div className="card-inner grid place-items-center p-12 text-center text-muted-foreground">
-            <p>
-              A aba <b className="text-foreground">{tab}</b> vem nas próximas etapas.
-            </p>
-          </div>
-        )}
+        {shown === "Hoje" ? <TodayTab /> : pending || shown !== tab ? <TabSkeleton /> : panel}
       </section>
       <StatsSection />
     </div>
@@ -71,14 +92,19 @@ export function Dashboard({ data }: { data: DashboardData }) {
 }
 
 function PetPeek() {
-  const { streak } = useDash();
+  const { streak, pet } = useDash();
   return (
     <Link
       href="/foguinho"
       aria-label="Abrir seu foguinho"
       className="absolute -top-8 right-2 z-10 transition hover:-translate-y-1 hover:rotate-3 md:-top-10 md:right-3"
     >
-      <Foguinho stage={0} mood={streak.studiedToday ? "happy" : "sleepy"} className="size-14 -rotate-6 drop-shadow-md md:size-20" />
+      <Foguinho
+        stage={pet?.stage ?? 0}
+        mood={pet?.mood ?? (streak.studiedToday ? "happy" : "sleepy")}
+        accessory={pet?.accessory ?? null}
+        className="size-14 -rotate-6 drop-shadow-md md:size-20"
+      />
     </Link>
   );
 }
@@ -173,7 +199,7 @@ function TodayTab() {
         </div>
       </div>
       <div className="grid gap-3 md:col-span-12 md:grid-cols-3 md:gap-4 lg:col-span-3 lg:grid-cols-1 lg:content-start">
-        <StreakCard />
+        <DashStreakCard />
         <ReadingCard />
         <ExerciseCard />
       </div>
@@ -608,51 +634,9 @@ function JournalDialog({ mood, onMood, onClose }: { mood: number | null; onMood:
   );
 }
 
-const DAYS = ["D", "S", "T", "Q", "Q", "S", "S"];
-
-function StreakCard() {
-  const { streak, weekDots } = useDash();
-  return (
-    <section className="card-inner p-4 text-center">
-      <div className="flex items-center justify-between text-left">
-        <span className="text-xs font-semibold text-muted-foreground">Sequência</span>
-        <span title="Ganha 1 a cada 7 dias seguidos (máx. 2). Protege um dia em branco." className="flex items-center gap-1 rounded-full bg-card px-2 py-0.5 text-xs font-medium">
-          <Icon3D name="emoji/lenha.webp" size={14} /> {streak.firewood} lenha
-        </span>
-      </div>
-      <Icon3D name="fogo.png" size={80} className={cn("mx-auto my-2 transition", !streak.studiedToday && "opacity-50 grayscale-[0.4]")} />
-      <p className="text-xl font-extrabold">
-        {streak.streak} {streak.streak === 1 ? "dia seguido" : "dias seguidos"}
-      </p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        {streak.studiedToday ? "Foguinho aceso hoje! Mantenha o foco e ganhe XP." : "Estude um pouco hoje para não deixar o fogo apagar."}
-      </p>
-      {!streak.studiedToday && (
-        <Link href="/foco" className="mx-auto mt-3 block h-7 w-3/4 rounded-full bg-primary text-xs font-semibold leading-7 text-white hover:brightness-110">
-          Estudar agora
-        </Link>
-      )}
-      <div className="mt-3 flex justify-center gap-1">
-        {weekDots.map((w, i) => (
-          <span
-            key={i}
-            title={w === "firewood" ? "Protegido pela lenha" : w === "rest" ? "Descanso planejado" : undefined}
-            className={cn(
-              "grid size-7 place-items-center rounded-full text-[11px] font-bold",
-              w === "studied" && "bg-primary text-primary-foreground",
-              w === "today" && "bg-card text-primary ring-2 ring-primary",
-              w === "firewood" && "bg-amber-600 text-white",
-              w === "missed" && "bg-destructive/15 text-destructive",
-              w === "future" && "bg-card text-muted-foreground",
-              w === "rest" && "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-            )}
-          >
-            {DAYS[i]}
-          </span>
-        ))}
-      </div>
-    </section>
-  );
+function DashStreakCard() {
+  const { streak, weekDots, pet } = useDash();
+  return <StreakCard streak={streak} weekDots={weekDots} pet={pet} />;
 }
 
 function ReadingCard() {

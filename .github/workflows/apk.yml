@@ -6,6 +6,9 @@ on:
     paths:
       - "capacitor.config.ts"
       - "capacitor-shell/**"
+      - "android-plugins/**"
+      - "package.json"
+      - "package-lock.json"
       - "public/icon-512.png"
       - "android-signing/**"
       - ".github/workflows/apk.yml"
@@ -13,6 +16,9 @@ on:
     paths:
       - "capacitor.config.ts"
       - "capacitor-shell/**"
+      - "android-plugins/**"
+      - "package.json"
+      - "package-lock.json"
       - "android-signing/**"
       - ".github/workflows/apk.yml"
   workflow_dispatch:
@@ -44,6 +50,27 @@ jobs:
           npx cap add android
           npx cap sync android
 
+      # Quando um plugin não é encontrado, o Capacitor segue em silêncio e o APK sai sem ele.
+      # Falhar aqui é melhor do que publicar um APK sem o bloqueio de apps ou sem notificações.
+      - name: Conferir os plugins registrados
+        run: |
+          cat android/app/src/main/assets/capacitor.plugins.json
+          # Modo Disciplina (plugin local em android-plugins/app-blocker)
+          grep -q "app.libelluz.appblocker.AppBlockerPlugin" android/app/src/main/assets/capacitor.plugins.json
+          grep -q "libelluz-app-blocker" android/capacitor.settings.gradle
+          # POST_NOTIFICATIONS (Android 13+) e as permissões do bloqueio entram no app pelo
+          # manifest merger, a partir do manifest do plugin local (conferido no APK mais abaixo).
+          grep -q "android.permission.POST_NOTIFICATIONS" android-plugins/app-blocker/android/src/main/AndroidManifest.xml
+          grep -q "android.permission.PACKAGE_USAGE_STATS" android-plugins/app-blocker/android/src/main/AndroidManifest.xml
+          grep -q "android.permission.SYSTEM_ALERT_WINDOW" android-plugins/app-blocker/android/src/main/AndroidManifest.xml
+          # Plugins do npm que o site usa via import() dinâmico: só exigimos os que estão no package.json.
+          for dep in @capacitor/local-notifications @capacitor/push-notifications; do
+            if node -e "const p=require('./package.json');process.exit(((p.dependencies||{})['$dep']||(p.devDependencies||{})['$dep'])?0:1)"; then
+              echo "conferindo $dep"
+              grep -q "$dep" android/app/src/main/assets/capacitor.plugins.json
+            fi
+          done
+
       - name: Ícone do app
         run: |
           command -v convert || (sudo apt-get update && sudo apt-get install -y imagemagick)
@@ -68,6 +95,15 @@ jobs:
             --ks ../android-signing/libelluz.keystore --ks-key-alias libelluz \
             --ks-pass pass:libelluz-app --key-pass pass:libelluz-app \
             --out ../libelluz.apk aligned.apk
+
+      # Confere no APK pronto que o manifest merger levou as permissões do Modo Disciplina.
+      - name: Conferir as permissões do APK
+        run: |
+          BT=$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort -V | tail -1)
+          $BT/aapt2 dump permissions libelluz.apk | tee perms.txt
+          grep -q "android.permission.PACKAGE_USAGE_STATS" perms.txt
+          grep -q "android.permission.SYSTEM_ALERT_WINDOW" perms.txt
+          grep -q "android.permission.POST_NOTIFICATIONS" perms.txt
 
       - uses: actions/upload-artifact@v4
         with:

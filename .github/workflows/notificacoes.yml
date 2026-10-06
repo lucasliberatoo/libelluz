@@ -1,0 +1,36 @@
+name: Notificações
+
+# O foguinho cobra a galera a cada 30 min: chama a rota de cron, que decide
+# o que mandar (sequência em risco, revisão atrasada, água, ENEM…) e envia o push.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: notificacoes
+  cancel-in-progress: false
+
+jobs:
+  disparar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar /api/cron/notificacoes
+        env:
+          LIBELLUZ_URL: ${{ secrets.LIBELLUZ_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${LIBELLUZ_URL:-}" ] || [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::Faltam os secrets LIBELLUZ_URL e/ou CRON_SECRET."
+            exit 1
+          fi
+          corpo=$(mktemp)
+          codigo=$(curl -sS --max-time 90 --retry 2 --retry-delay 10 --retry-connrefused \
+            -o "$corpo" -w '%{http_code}' \
+            -X POST "${LIBELLUZ_URL%/}/api/cron/notificacoes" \
+            -H "authorization: Bearer $CRON_SECRET")
+          echo "HTTP $codigo"
+          cat "$corpo"
+          echo
+          [ "$codigo" = "200" ]

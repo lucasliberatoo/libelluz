@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import { saveProfile } from "@/server/actions";
 
@@ -16,11 +16,15 @@ type P = {
   weeklyXpGoal: number;
 };
 
+const noop = () => () => {};
 const input = "mt-1 w-full rounded-xl border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary";
 
 export function ProfileForm({ initial }: { initial: P }) {
   const [state, action, pending] = useActionState(saveProfile, undefined);
-  const { theme, setTheme } = useTheme();
+  const { theme: rawTheme, setTheme } = useTheme();
+  // o tema só existe no navegador; no servidor nenhum botão fica marcado (evita erro de hidratação)
+  const mounted = useSyncExternalStore(noop, () => true, () => false);
+  const theme = mounted ? rawTheme : undefined;
   const field = (name: keyof P, label: string, type = "number") => (
     <label className="text-sm">
       {label}

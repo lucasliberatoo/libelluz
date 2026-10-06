@@ -20,6 +20,7 @@ import { Foguinho } from "@/components/brand";
 import {
   addFocusNote,
   addWaterCup,
+  addWellnessHeat,
   deleteFocusNote,
   listFocusNotes,
   toggleFocusCheck,
@@ -484,6 +485,27 @@ function fmt(ms: number) {
   return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
 }
 
+/** Dá o calor da pausa uma vez, quando `ready` vira true. */
+function useWellnessHeat(kind: "breath" | "stretch", ready: boolean) {
+  const [heat, setHeat] = useState<number | null>(null);
+  const sent = useRef(false);
+  useEffect(() => {
+    if (!ready || sent.current) return;
+    sent.current = true;
+    addWellnessHeat(kind).then(setHeat, () => {});
+  }, [kind, ready]);
+  return heat;
+}
+
+function HeatToast({ heat }: { heat: number | null }) {
+  if (heat === null) return null;
+  return (
+    <p className="mx-auto mt-3 w-fit rounded-full bg-white/20 px-3 py-1 text-sm font-semibold">
+      {heat > 0 ? `+${heat} de calor para o foguinho 🌡️` : "Calor desta pausa já ganho hoje 🌡️"}
+    </p>
+  );
+}
+
 const BREATH_STEPS = ["Inspira", "Segura", "Solta", "Segura"];
 
 function Breath() {
@@ -492,6 +514,8 @@ function Breath() {
     const id = setInterval(() => setStep((s) => s + 1), 4000);
     return () => clearInterval(id);
   }, []);
+  // um ciclo completo (16 s) aquece o foguinho
+  const heat = useWellnessHeat("breath", step >= 4);
   return (
     <div className="my-6">
       <h2 className="text-2xl font-bold">Vamos desacelerar e respirar</h2>
@@ -505,6 +529,7 @@ function Breath() {
       </motion.div>
       <p className="text-2xl font-bold">{BREATH_STEPS[step % 4]}</p>
       <p className="text-sm opacity-75">ciclo {Math.floor(step / 4) + 1}</p>
+      <HeatToast heat={heat} />
     </div>
   );
 }
@@ -528,6 +553,7 @@ function Stretch() {
   }, [left, i]);
   const s = STRETCHES[i];
   const finished = i === STRETCHES.length - 1 && left <= 0;
+  const heat = useWellnessHeat("stretch", finished);
   return (
     <div className="my-6">
       <h2 className="text-2xl font-bold">Hora de alongar</h2>
@@ -545,7 +571,10 @@ function Stretch() {
         </motion.div>
       </motion.div>
       {finished ? (
-        <p className="text-xl font-bold">Prontinho! Corpo agradece 🙌</p>
+        <>
+          <p className="text-xl font-bold">Prontinho! Corpo agradece 🙌</p>
+          <HeatToast heat={heat} />
+        </>
       ) : (
         <>
           <p className="text-xl font-bold">{s.t}</p>
