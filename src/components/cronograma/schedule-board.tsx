@@ -161,7 +161,7 @@ export function ScheduleBoard({ data }: { data: SchedulePageData }) {
 
       {/* Celular: um dia por vez */}
       <div className="md:hidden">
-        <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1">
+        <div className="grid grid-cols-7 gap-1 pb-1">
           {days.map((d) => {
             const n = blocks.filter((b) => b.day === d).length;
             const rest = config.restDay === weekdayOf(d);
@@ -170,7 +170,7 @@ export function ScheduleBoard({ data }: { data: SchedulePageData }) {
                 key={d}
                 onClick={() => setSelected(d)}
                 className={cn(
-                  "flex min-w-12 flex-1 flex-col items-center rounded-2xl py-1.5 text-xs font-semibold transition",
+                  "flex min-w-0 flex-col items-center rounded-2xl py-1.5 text-xs font-semibold transition",
                   d === selected ? "bg-primary text-primary-foreground shadow" : "bg-card ring-1 ring-border",
                   d === today && d !== selected && "ring-2 ring-primary",
                 )}
