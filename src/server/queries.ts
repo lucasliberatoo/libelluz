@@ -4,6 +4,7 @@ import { getDb, schema } from "@/db";
 import { addDays, dayOf, weekStart, weekdayOf, WEEKDAYS } from "@/lib/day";
 import { computeStreak, computeStudyMode } from "@/lib/game";
 import { levelFromXp } from "@/lib/levels";
+import { getTodayPlan, restDaysOf } from "./schedule";
 
 const { users, focusSessions, xpEvents, dailyTasks, habitLogs, studyNodes } = schema;
 
@@ -71,7 +72,7 @@ export async function totalXp(userId: string) {
 export async function getShellData(userId: string) {
   const today = dayOf();
   const [u, mins, xp] = await Promise.all([getUser(userId), minutesByDay(userId), totalXp(userId)]);
-  const streak = computeStreak(mins.keys(), today);
+  const streak = computeStreak(mins.keys(), today, u ? restDaysOf(u, today) : undefined);
   return { name: firstName(u?.name), image: u?.image ?? null, streak: streak.streak, xp };
 }
 
@@ -83,7 +84,7 @@ export async function getDashboard(userId: string) {
   const ws = weekStart(today);
   const lastWs = addDays(ws, -7);
 
-  const [u, mins, xpTotal, xpRows, tasks, habit, sessionsWeek, accuracyRows, lastFocus, groupRows] = await Promise.all([
+  const [u, mins, xpTotal, xpRows, tasks, habit, sessionsWeek, accuracyRows, lastFocus, groupRows, plan] = await Promise.all([
     getUser(userId),
     minutesByDay(userId),
     totalXp(userId),
@@ -117,10 +118,12 @@ export async function getDashboard(userId: string) {
       .from(focusSessions)
       .where(and(isNotNull(focusSessions.endedAt), gte(focusSessions.day, ws)))
       .groupBy(focusSessions.userId),
+    getTodayPlan(userId, today),
   ]);
   if (!u) throw new Error("Usuário não encontrado");
 
-  const streak = computeStreak(mins.keys(), today);
+  const restDays = new Set(restDaysOf(u, addDays(ws, 6)));
+  const streak = computeStreak(mins.keys(), today, restDays);
   const mode = computeStudyMode(mins, today, u.focusGoalMin);
   const lv = levelFromXp(xpTotal);
 
@@ -150,10 +153,12 @@ export async function getDashboard(userId: string) {
   const joined = dayOf(u.createdAt);
   const weekDots = WEEKDAYS.map((_, i) => {
     const d = addDays(ws, i);
-    if (d > today || d < joined) return "future" as const;
+    if (d < joined) return "future" as const;
+    if (d > today) return restDays.has(d) ? ("rest" as const) : ("future" as const);
     if (mins.has(d)) return "studied" as const;
     if (streak.burned.includes(d)) return "firewood" as const;
     if (d === today) return "today" as const;
+    if (restDays.has(d)) return "rest" as const;
     return "missed" as const;
   });
 
@@ -176,6 +181,8 @@ export async function getDashboard(userId: string) {
     weekDots,
     xp: { week: xpWeek, goals: { day: u.dailyXpGoal, week: u.weeklyXpGoal } },
     tasks: tasks.map((t) => ({ id: t.id, title: t.title, area: t.area, plannedMin: t.plannedMin, done: t.done })),
+    blocks: plan.blocks,
+    reviews: plan.reviews,
     habit: {
       water: habit?.waterCups ?? 0,
       mood: habit?.mood ?? null,
@@ -187,7 +194,12 @@ export async function getDashboard(userId: string) {
     goals: [
       { label: "Horas de foco", value: round1(todayMin / 60), target: round1(u.focusGoalMin / 60), unit: "h" },
       { label: "Questões", value: todayQuestions, target: u.questionsGoal, unit: "" },
-      { label: "Tarefas", value: tasks.filter((t) => t.done).length, target: Math.max(tasks.length, 1), unit: "" },
+      {
+        label: "Tarefas",
+        value: tasks.filter((t) => t.done).length + plan.blocks.filter((b) => b.done).length,
+        target: Math.max(tasks.length + plan.blocks.length, 1),
+        unit: "",
+      },
     ],
     lastFocus: lastFocus
       ? { area: lastFocus.area, subject: lastFocus.subject, topic: lastFocus.topic, kind: lastFocus.kind }

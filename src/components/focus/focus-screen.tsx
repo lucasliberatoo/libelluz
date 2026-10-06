@@ -45,6 +45,7 @@ function fmtMin(m: number) {
 
 export type FocusTree = { area: string; subjects: { name: string; topics: string[] }[] }[];
 export type FocusSuggestion = { label: string; area: string; subject: string; topic: string; kind?: StudyKind };
+export type FocusPreset = { area: string; subject: string; topic: string; kind?: StudyKind; minutes?: number };
 
 export function FocusScreen({
   tree,
@@ -53,7 +54,7 @@ export function FocusScreen({
 }: {
   tree: FocusTree;
   suggestions: FocusSuggestion[];
-  preset: { area: string; subject: string; topic: string } | null;
+  preset: FocusPreset | null;
 }) {
   const { session } = useFocus();
   const [summary, setSummary] = useState<FocusResult | null>(null);
@@ -93,7 +94,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
   );
 }
 
-function Configure({ tree, suggestions, preset }: { tree: FocusTree; suggestions: FocusSuggestion[]; preset: { area: string; subject: string; topic: string } | null }) {
+function Configure({ tree, suggestions, preset }: { tree: FocusTree; suggestions: FocusSuggestion[]; preset: FocusPreset | null }) {
   const { start } = useFocus();
   const first = preset ?? suggestions[0] ?? {
     area: tree[0]?.area ?? "",
@@ -105,9 +106,9 @@ function Configure({ tree, suggestions, preset }: { tree: FocusTree; suggestions
   const [subject, setSubject] = useState<string>(first.subject);
   const topics = subjects.find((s) => s.name === subject)?.topics ?? [];
   const [topic, setTopic] = useState<string>(first.topic);
-  const [kind, setKind] = useState<StudyKind>("Teoria");
+  const [kind, setKind] = useState<StudyKind>(preset?.kind ?? (preset ? "Teoria" : suggestions[0]?.kind) ?? "Teoria");
   const [method, setMethod] = useState<FocusMethod>("Cronometrado");
-  const [minutes, setMinutes] = useState(60);
+  const [minutes, setMinutes] = useState(preset?.minutes ?? 60);
   const [starting, setStarting] = useState(false);
 
   const pick = (c: FocusSuggestion) => {

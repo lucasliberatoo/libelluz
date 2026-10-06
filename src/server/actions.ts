@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
@@ -10,6 +10,7 @@ import { auth, consumeInvite, findUsableInvite, INVITE_COOKIE, isAdminEmail, sig
 import { getDb, schema } from "@/db";
 import { dayOf } from "@/lib/day";
 import { computeStudyMode, sessionXp, XP } from "@/lib/game";
+import { applyReviewAccuracy, syncFocusToSchedule } from "./schedule";
 import { seedTree } from "./seed";
 import { award } from "./xp";
 import { getActiveFocus, getUser, minutesByDay, type ActiveFocus } from "./queries";
@@ -145,15 +146,20 @@ export async function stopFocus(id: string): Promise<FocusResult> {
   const end = s.endedAt ?? new Date();
   const stopAt = s.pausedAt ?? end;
   const minutes = Math.max(0, (stopAt.getTime() - s.startedAt.getTime() - s.pausedMs) / 60000);
-  if (!s.endedAt)
-    await db
+  const day = s.day ?? dayOf(s.startedAt);
+  let xp = 0;
+  if (!s.endedAt) {
+    const closed = await db
       .update(focusSessions)
       .set({ endedAt: end, durationMin: Math.round(minutes * 10) / 10 })
-      .where(eq(focusSessions.id, id));
-  const day = s.day ?? dayOf(s.startedAt);
+      .where(and(eq(focusSessions.id, id), isNull(focusSessions.endedAt)))
+      .returning({ id: focusSessions.id });
+    // Cronograma: soma no bloco do dia com o mesmo tópico e cuida das revisões (só uma vez por sessão)
+    if (closed.length) xp += await syncFocusToSchedule(userId, s, day, minutes);
+  }
   const u = await getUser(userId);
   const mode = computeStudyMode(await minutesByDay(userId), dayOf(), u?.focusGoalMin ?? 180);
-  let xp = await award(
+  xp += await award(
     userId,
     day,
     sessionXp({ minutes, area: s.area, advanced: mode === "Avançado" }),
@@ -201,6 +207,7 @@ export async function saveFocusResult(id: string, input: z.infer<typeof resultSc
     for (const m of XP.questionMilestones)
       if (total >= m.n) xp += await award(userId, day, m.xp, m.label, `q${m.n}:${day}`);
   }
+  if (s.kind === "Revisão") await applyReviewAccuracy(userId, s, done, correct);
   revalidatePath("/", "layout");
   return xp;
 }

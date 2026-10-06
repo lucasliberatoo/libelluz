@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { createContext, useContext, useOptimistic, useState, useTransition } from "react";
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis } from "recharts";
-import { Camera, Check, Pencil, Play, Plus, X } from "lucide-react";
+import { Camera, Check, Pencil, Play, Plus, RotateCcw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Foguinho, Icon3D } from "@/components/brand";
 import type { DashboardData } from "@/server/queries";
@@ -303,6 +303,72 @@ function ContinueCard() {
   );
 }
 
+const focusHref = (topic: string, kind?: "study" | "review", min?: number) =>
+  `/foco?topic=${encodeURIComponent(topic)}${kind === "review" ? `&kind=${encodeURIComponent("Revisão")}` : ""}${min ? `&min=${Math.round(min)}` : ""}`;
+
+/** Blocos do cronograma de hoje e revisões do dia (acima das tarefas avulsas). */
+function PlanToday() {
+  const { blocks, reviews } = useDash();
+  if (!blocks.length && !reviews.length) return null;
+  return (
+    <div className="mb-3 space-y-1.5">
+      {blocks.map((b) => {
+        const pct = Math.min(100, (b.doneMin / b.plannedMin) * 100);
+        const review = b.kind === "review";
+        return (
+          <Link
+            key={b.id}
+            href={focusHref(b.topic, b.kind, b.done ? undefined : Math.max(10, b.plannedMin - b.doneMin))}
+            className={cn("flex items-center gap-2.5 rounded-xl bg-card p-2 shadow-sm", review && "border border-dashed border-violet-400/70")}
+          >
+            <span
+              className={cn(
+                "grid size-8 shrink-0 place-items-center rounded-lg text-white",
+                b.done ? "bg-success" : review ? "bg-violet-500" : (areaColor[b.area] ?? "bg-muted-foreground/40"),
+              )}
+            >
+              {b.done ? <Check className="size-4" /> : review ? <RotateCcw className="size-4" /> : <Play className="size-3.5 fill-current" />}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className={cn("truncate text-[13px] font-semibold leading-tight", b.done && "text-muted-foreground")}>{b.topic}</p>
+              <div className="mt-1 flex items-center gap-2">
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div className={cn("h-full rounded-full", review ? "bg-violet-500" : "bg-primary", b.done && "bg-success")} style={{ width: `${pct}%` }} />
+                </div>
+                <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                  {Math.round(b.doneMin)}/{b.plannedMin} min
+                </span>
+              </div>
+            </div>
+          </Link>
+        );
+      })}
+      {reviews.length > 0 && (
+        <>
+          <p className="px-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Revisões do dia</p>
+          {reviews.map((r) => (
+            <Link
+              key={r.id}
+              href={focusHref(r.topic, "review", 30)}
+              className="flex items-center gap-2.5 rounded-xl bg-card p-2 shadow-sm border border-dashed border-violet-400/70"
+            >
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-violet-500 text-white">
+                <RotateCcw className="size-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-semibold leading-tight">{r.topic}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {r.subject} · {r.late ? `desde ${r.dueDay.slice(8)}/${r.dueDay.slice(5, 7)}` : "hoje"}
+                </p>
+              </div>
+            </Link>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
 function TasksCard() {
   const { tasks } = useDash();
   const [opt, toggleOpt] = useOptimistic(tasks, (l, id: string) => l.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
@@ -317,7 +383,17 @@ function TasksCard() {
   };
   return (
     <section className="card-inner p-3">
-      <CardTitle icon="emoji/tarefas.webp">To do list</CardTitle>
+      <CardTitle
+        icon="emoji/tarefas.webp"
+        action={
+          <Link href="/cronograma" className="text-xs font-semibold text-primary hover:underline">
+            Cronograma
+          </Link>
+        }
+      >
+        Tarefas do dia
+      </CardTitle>
+      <PlanToday />
       <ul className="space-y-1.5">
         {opt.map((t) => (
           <li key={t.id} className="group flex items-center gap-2.5 rounded-xl bg-card p-2 shadow-sm">
@@ -341,7 +417,7 @@ function TasksCard() {
           </li>
         ))}
       </ul>
-      {!opt.length && <p className="px-1 text-xs text-muted-foreground">Nada ainda. Digite e dê enter.</p>}
+      {!opt.length && <p className="px-1 text-xs text-muted-foreground">Tarefas avulsas: digite e dê enter.</p>}
       <form onSubmit={submit} className="mt-2 flex items-center gap-1 rounded-xl bg-card px-2 ring-1 ring-border">
         <Plus className="size-4 text-muted-foreground" />
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nova tarefa…" className="h-9 flex-1 bg-transparent text-sm outline-none" />
@@ -560,7 +636,7 @@ function StreakCard() {
         {weekDots.map((w, i) => (
           <span
             key={i}
-            title={w === "firewood" ? "Protegido pela lenha" : undefined}
+            title={w === "firewood" ? "Protegido pela lenha" : w === "rest" ? "Descanso planejado" : undefined}
             className={cn(
               "grid size-7 place-items-center rounded-full text-[11px] font-bold",
               w === "studied" && "bg-primary text-primary-foreground",
@@ -568,6 +644,7 @@ function StreakCard() {
               w === "firewood" && "bg-amber-600 text-white",
               w === "missed" && "bg-destructive/15 text-destructive",
               w === "future" && "bg-card text-muted-foreground",
+              w === "rest" && "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
             )}
           >
             {DAYS[i]}
