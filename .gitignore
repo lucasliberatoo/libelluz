@@ -18,3 +18,7 @@ next-env.d.ts
 # conteúdo de terceiros (uso pessoal, não versionar)
 _contexto/imagens/inspiracao/
 _contexto/referencias/
+.pglite/
+
+# Android gerado no CI pelo Capacitor
+/android/

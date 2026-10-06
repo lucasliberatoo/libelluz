@@ -1,8 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
-import { FocusProvider } from "@/components/focus/focus-provider";
-import { AppShell } from "@/components/shell/app-shell";
+import { ServiceWorkerRegister } from "@/components/sw-register";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,6 +17,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Libelluz",
   description: "Estude para o ENEM evoluindo rumo aos 160+.",
+  applicationName: "Libelluz",
+  appleWebApp: { capable: true, title: "Libelluz", statusBarStyle: "default" },
+  icons: { icon: "/icon-192.png", apple: "/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = {
@@ -37,9 +39,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <FocusProvider>
-            <AppShell>{children}</AppShell>
-          </FocusProvider>
+          {children}
+          <ServiceWorkerRegister />
         </ThemeProvider>
       </body>
     </html>
