@@ -1,26 +1,15 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import {
-  CheckSquare,
-  Droplet,
-  Headphones,
-  Infinity as InfinityIcon,
-  Mic,
-  NotebookPen,
-  Pause,
-  Pin,
-  Play,
-  Square,
-  Timer,
-  Wind,
-  PersonStanding,
-  Apple,
-} from "lucide-react";
+import { Apple, Infinity as InfinityIcon, Pause, Play, Square, Timer } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CairnLogo, Foguinho } from "@/components/brand";
+import { CairnLogo } from "@/components/brand";
+import { listFocusNotes, type FocusNote } from "@/server/focus-tools";
+import { FocusTools, WellnessOverlay } from "./focus-tools";
+import { chime, stopNoise } from "./noise";
 import { discardFocus, saveFocusResult, type FocusResult } from "@/server/actions";
 import {
   fmtClock,
@@ -245,29 +234,73 @@ function Configure({ tree, suggestions, preset }: { tree: FocusTree; suggestions
   );
 }
 
-const TOOLS = [
-  { icon: Droplet, label: "Água" },
-  { icon: Wind, label: "Respirar" },
-  { icon: PersonStanding, label: "Alongar" },
-  { icon: Headphones, label: "Ruído" },
-  { icon: NotebookPen, label: "Nota" },
-  { icon: Mic, label: "Áudio" },
-  { icon: CheckSquare, label: "Checklist" },
-  { icon: Pin, label: "Insight" },
-];
+const POMODORO_MS = 25 * 60_000;
+const FREE_BREAK_MS = 50 * 60_000;
 
 function Running({ onStop }: { onStop: (s: FocusResult) => void }) {
-  const { session, elapsedMs, pause, resume, stop } = useFocus();
-  const [breathing, setBreathing] = useState(false);
+  const { session, elapsedMs, now, pause, resume, stop } = useFocus();
+  const [overlay, setOverlay] = useState<"breath" | "stretch" | null>(null);
+  const [breakUntil, setBreakUntil] = useState<number | null>(null);
   const [stopping, setStopping] = useState(false);
+  // ciclos/avisos já tratados (os anteriores a abrir a tela não disparam de novo)
+  const [pomoDone, setPomoDone] = useState(() => Math.floor(elapsedMs / POMODORO_MS));
+  const [freeSeen, setFreeSeen] = useState(() => Math.floor(elapsedMs / FREE_BREAK_MS));
+  const [overDismissed, setOverDismissed] = useState(false);
+
+  const method = session?.method;
+  const paused = !!session?.pausedAt;
+  const free = method === "Livre";
+  const pomodoro = method === "Pomodoro";
+  const target = (session?.minutes ?? 0) * 60_000;
+  const pomoIndex = Math.floor(elapsedMs / POMODORO_MS);
+  const pomoDue = pomodoro && !paused && pomoIndex > pomoDone;
+  const overTime = !free && !pomodoro && target > 0 && elapsedMs >= target;
+  const freeBreak = free && !paused && Math.floor(elapsedMs / FREE_BREAK_MS) > freeSeen;
+  const breakMs = breakUntil ? Math.max(0, breakUntil - now) : 0;
+
+  // Pomodoro: a cada 25 min, pausa sozinho e abre a tela de bem-estar (5 min; 15 a cada 4 ciclos)
+  useEffect(() => {
+    if (!pomoDue) return;
+    const t = setTimeout(() => {
+      pause();
+      chime();
+      setPomoDone(pomoIndex);
+      setBreakUntil(Date.now() + (pomoIndex % 4 === 0 ? 15 : 5) * 60_000);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [pomoDue, pomoIndex, pause]);
+
+  // fim da pausa do Pomodoro: volta ao foco
+  useEffect(() => {
+    if (!breakUntil || breakMs > 0) return;
+    const t = setTimeout(() => {
+      chime();
+      setBreakUntil(null);
+      resume();
+    }, 0);
+    return () => clearTimeout(t);
+  }, [breakUntil, breakMs, resume]);
+
+  useEffect(() => {
+    if (overTime || freeBreak) chime();
+  }, [overTime, freeBreak]);
+
   if (!session) return null;
-  const free = session.method === "Livre";
-  const target = (free ? 50 : session.minutes) * 60_000;
-  const pct = Math.min(1, elapsedMs / target);
-  const remaining = Math.max(0, target - elapsedMs);
+  const ringTarget = pomodoro ? POMODORO_MS : free ? FREE_BREAK_MS : target;
+  const inCycle = pomodoro ? elapsedMs - pomoIndex * POMODORO_MS : free ? elapsedMs % FREE_BREAK_MS : elapsedMs;
+  const pct = Math.min(1, inCycle / ringTarget);
+  const remaining = Math.max(0, ringTarget - inCycle);
   const r = 120;
   const c = 2 * Math.PI * r;
-  const paused = !!session.pausedAt;
+
+  const openWellness = (m: "breath" | "stretch") => {
+    if (!paused) pause();
+    setOverlay(m);
+  };
+  const closeWellness = () => {
+    setOverlay(null);
+    resume();
+  };
 
   return (
     <section className="rounded-3xl bg-gradient-to-b from-primary to-blue-500 p-5 text-center text-white shadow-xl md:p-7">
@@ -294,13 +327,50 @@ function Running({ onStop }: { onStop: (s: FocusResult) => void }) {
         </svg>
         <div className="absolute inset-0 grid place-items-center">
           <div>
-            <p className="text-5xl font-bold tabular-nums">{fmtClock(free ? elapsedMs : remaining)}</p>
+            <p className="text-5xl font-bold tabular-nums">{fmtClock(free || overTime ? elapsedMs : remaining)}</p>
             <p className="mt-1 text-sm opacity-80">
-              {paused ? "pausado (não conta)" : free ? "modo livre" : `${session.method} · ${fmtClock(elapsedMs)} feitos`}
+              {paused
+                ? "pausado (não conta)"
+                : free
+                  ? "modo livre"
+                  : pomodoro
+                    ? `Pomodoro ${pomoIndex + 1} · ${fmtClock(elapsedMs)} no total`
+                    : overTime
+                      ? "tempo cumprido · seguindo"
+                      : `${session.method} · ${fmtClock(elapsedMs)} feitos`}
             </p>
           </div>
         </div>
       </div>
+
+      {overTime && !overDismissed && (
+        <div className="mx-auto mt-4 max-w-sm rounded-2xl bg-white/15 p-3 text-sm">
+          <p className="font-semibold">⏰ Tempo cumprido! Mandou bem.</p>
+          <p className="opacity-85">Encerre para salvar ou continue estudando: o tempo extra também conta.</p>
+          <button onClick={() => setOverDismissed(true)} className="mt-2 rounded-full bg-white/20 px-4 py-1 font-semibold">
+            Continuar estudando
+          </button>
+        </div>
+      )}
+      {freeBreak && (
+        <div className="mx-auto mt-4 max-w-sm rounded-2xl bg-white/15 p-3 text-sm">
+          <p className="font-semibold">Já são {Math.floor(elapsedMs / 60_000)} min de foco. Que tal uma pausa?</p>
+          <div className="mt-2 flex justify-center gap-2">
+            <button
+              onClick={() => {
+                setFreeSeen(Math.floor(elapsedMs / FREE_BREAK_MS));
+                openWellness("breath");
+              }}
+              className="rounded-full bg-white px-4 py-1 font-semibold text-primary"
+            >
+              Fazer uma pausa
+            </button>
+            <button onClick={() => setFreeSeen(Math.floor(elapsedMs / FREE_BREAK_MS))} className="rounded-full bg-white/20 px-4 py-1 font-semibold">
+              Seguir
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="mt-6 flex justify-center gap-4">
         <button
@@ -314,6 +384,7 @@ function Running({ onStop }: { onStop: (s: FocusResult) => void }) {
           disabled={stopping || !session.id}
           onClick={async () => {
             setStopping(true);
+            stopNoise();
             const r = await stop();
             setStopping(false);
             if (r) onStop(r);
@@ -325,48 +396,24 @@ function Running({ onStop }: { onStop: (s: FocusResult) => void }) {
         </button>
       </div>
 
-      <div className="no-scrollbar -mx-5 mt-7 flex justify-start gap-1 overflow-x-auto px-5 md:justify-center">
-        {TOOLS.map(({ icon: Icon, label }) => (
-          <button
-            key={label}
-            onClick={() => label === "Respirar" && setBreathing(true)}
-            className="flex min-w-14 flex-col items-center gap-1 rounded-xl px-2 py-2 text-[11px] opacity-90 hover:bg-white/10"
-          >
-            <Icon className="size-5" />
-            {label}
-          </button>
-        ))}
-      </div>
-      <p className="mt-3 text-xs opacity-70">Pode navegar pelo app: o timer continua rodando.</p>
+      <FocusTools sessionId={session.id} onBreak={openWellness} />
+      <p className="mt-3 text-xs opacity-70">Pode navegar pelo app: o timer e o ruído continuam.</p>
 
-      <AnimatePresence>{breathing && <BreathOverlay onClose={() => setBreathing(false)} />}</AnimatePresence>
+      <AnimatePresence>
+        {overlay && <WellnessOverlay key="w" mode={overlay} onClose={closeWellness} />}
+        {breakUntil && !overlay && (
+          <WellnessOverlay
+            key="p"
+            mode="pomodoro"
+            breakMs={breakMs}
+            onClose={() => {
+              setBreakUntil(null);
+              resume();
+            }}
+          />
+        )}
+      </AnimatePresence>
     </section>
-  );
-}
-
-function BreathOverlay({ onClose }: { onClose: () => void }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 grid place-items-center bg-gradient-to-b from-sky-500 to-indigo-600 p-6 text-white"
-    >
-      <div className="text-center">
-        <h2 className="text-2xl font-bold">Vamos desacelerar e respirar</h2>
-        <p className="mt-1 opacity-85">Respiração quadrada: 4s inspira · 4s segura · 4s solta · 4s segura</p>
-        <motion.div
-          animate={{ scale: [1, 1.35, 1.35, 1, 1] }}
-          transition={{ duration: 16, times: [0, 0.25, 0.5, 0.75, 1], repeat: Infinity, ease: "easeInOut" }}
-          className="mx-auto my-10 grid size-40 place-items-center rounded-full bg-white/20"
-        >
-          <Foguinho stage={4} mood="sleepy" className="size-24" />
-        </motion.div>
-        <button onClick={onClose} className="rounded-full bg-white/20 px-6 py-2 font-semibold">
-          Voltar ao foco
-        </button>
-      </div>
-    </motion.div>
   );
 }
 
@@ -379,6 +426,14 @@ function Summary({ s, onClose }: { s: FocusResult; onClose: () => void }) {
   const [mood, setMood] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
   const [extraXp, setExtraXp] = useState<number | null>(null);
+  const [saved, setSaved] = useState<FocusNote[]>([]);
+  useEffect(() => {
+    let alive = true;
+    listFocusNotes(s.id).then((n) => alive && setSaved(n));
+    return () => {
+      alive = false;
+    };
+  }, [s.id]);
   const [pending, startTransition] = useTransition();
   const asksQuestions = s.kind === "Questões" || s.kind === "Revisão";
   const d = Number(done) || 0;
@@ -412,6 +467,8 @@ function Summary({ s, onClose }: { s: FocusResult; onClose: () => void }) {
       <p className="mt-4 text-4xl font-extrabold text-xp">+{s.xp + (extraXp ?? 0)} XP</p>
       {boosted && <p className="text-xs text-muted-foreground">inclui +20% de Natureza/Matemática</p>}
       {s.minutes < 25 && <p className="mt-1 text-xs text-muted-foreground">Cada 25 min de foco valem +10 XP.</p>}
+
+      {saved.length > 0 && <SavedNotes notes={saved} />}
 
       {asksQuestions && (
         <div className="mt-6 grid grid-cols-2 gap-3 text-left">
@@ -473,5 +530,35 @@ function Summary({ s, onClose }: { s: FocusResult; onClose: () => void }) {
         </button>
       )}
     </section>
+  );
+}
+
+function SavedNotes({ notes }: { notes: FocusNote[] }) {
+  const checks = notes.filter((n) => n.kind === "check");
+  return (
+    <div className="mt-5 rounded-2xl bg-muted/60 p-3 text-left text-sm">
+      <p className="mb-2 font-semibold">Salvo nesta sessão</p>
+      <ul className="space-y-1.5">
+        {notes
+          .filter((n) => n.kind !== "check")
+          .map((n) => (
+            <li key={n.id} className="flex items-start gap-2">
+              <span>{n.kind === "insight" ? "📌" : n.kind === "audio" ? "🎙️" : "📝"}</span>
+              {n.kind === "audio" ? <audio controls src={n.audio ?? undefined} className="h-8 flex-1" /> : <p className="flex-1 whitespace-pre-wrap">{n.text}</p>}
+            </li>
+          ))}
+        {checks.length > 0 && (
+          <li className="flex items-start gap-2">
+            <span>☑️</span>
+            <p className="flex-1">
+              Checklist: {checks.filter((c) => c.done).length}/{checks.length} feitos
+            </p>
+          </li>
+        )}
+      </ul>
+      <Link href="/foco/notas" className="mt-2 inline-block text-xs font-medium text-primary underline">
+        Ver todas as notas do foco
+      </Link>
+    </div>
   );
 }

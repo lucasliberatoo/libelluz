@@ -391,3 +391,25 @@ export const materials = pgTable(
   },
   (t) => [index("materials_user_idx").on(t.userId)],
 );
+
+/* ---------- Notas da sessão de foco (nota, insight, áudio, checklist) ---------- */
+
+export const focusNotes = pgTable(
+  "focus_notes",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => focusSessions.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["note", "insight", "audio", "check"] }).notNull(),
+    text: text("text"),
+    // nota em áudio: data URL (webm/opus, poucos minutos)
+    audio: text("audio"),
+    done: boolean("done").notNull().default(false),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("focus_notes_session_idx").on(t.sessionId), index("focus_notes_user_idx").on(t.userId)],
+);
