@@ -715,7 +715,12 @@ function StatsSection() {
   const maxH = Math.max(0.1, ...stats.hoursByArea.map((s) => s.h));
   return (
     <section className="card-soft p-4 md:p-6">
-      <h2 className="mb-4 text-xl font-bold">Estatísticas Gerais</h2>
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <h2 className="text-xl font-bold">Estatísticas Gerais</h2>
+        <Link href="/estatisticas" className="text-sm font-semibold text-primary hover:underline">
+          Ver todas →
+        </Link>
+      </div>
       <div className="grid gap-3 md:grid-cols-12 md:gap-4">
         <div className="card-inner p-4 md:col-span-6">
           <CardTitle
