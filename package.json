@@ -9,7 +9,7 @@
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node scripts/migrate.mjs",
-    "test": "tsx src/lib/game.test.ts && tsx src/lib/schedule.test.ts && tsx src/lib/exams.test.ts && tsx src/lib/sigv4.test.ts"
+    "test": "tsx src/lib/game.test.ts && tsx src/lib/schedule.test.ts && tsx src/lib/exams.test.ts && tsx src/lib/sigv4.test.ts && tsx src/lib/mapa.test.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",
