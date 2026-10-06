@@ -1,6 +1,7 @@
 import { Foguinho } from "@/components/brand";
 
-const APK_URL = "https://github.com/lucasliberatoo/libelluz/releases/download/apk-latest/libelluz.apk";
+// Publicado pelo workflow "APK Android" a cada nova versão da casca do app.
+const APK_URL = "/libelluz.apk";
 
 export default function BaixarPage() {
   return (
@@ -14,7 +15,7 @@ export default function BaixarPage() {
           <li>Se o Android pedir, permita instalar de &quot;fontes desconhecidas&quot;.</li>
           <li>Pronto: o app abre direto na sua conta e se atualiza sozinho com o site.</li>
         </ol>
-        <a href={APK_URL} className="mt-2 block rounded-full bg-primary py-2.5 text-center font-bold text-white">
+        <a href={APK_URL} download className="mt-2 block rounded-full bg-primary py-2.5 text-center font-bold text-white">
           Baixar APK
         </a>
       </div>

@@ -75,6 +75,16 @@ jobs:
           name: libelluz-apk
           path: libelluz.apk
 
+      # O repositório é privado: para os amigos baixarem, o APK também vai para o site (public/libelluz.apk).
+      - name: Publicar no site
+        if: github.event_name != 'pull_request'
+        run: |
+          cp libelluz.apk public/libelluz.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/libelluz.apk
+          git diff --cached --quiet || (git commit -m "APK atualizado" && git push)
+
       - name: Publicar em "apk-latest"
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
