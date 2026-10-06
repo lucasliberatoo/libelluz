@@ -1,9 +1,8 @@
-import { ComingSoon } from "@/components/coming-soon";
+import { auth } from "@/auth";
+import { RedacoesScreen } from "@/components/redacoes/redacoes";
+import { getEssayPage } from "@/server/essay-queries";
 
-export default function Page() {
-  return (
-    <ComingSoon title="Redações" phase="Fase 2">
-      Banco de temas, sorteio da semana e evolução por competência (C1–C5).
-    </ComingSoon>
-  );
+export default async function RedacoesPage() {
+  const userId = (await auth())!.user!.id!;
+  return <RedacoesScreen data={await getEssayPage(userId)} />;
 }
