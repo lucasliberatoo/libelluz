@@ -44,9 +44,11 @@ export type StreakInfo = {
  * Sequência calculada a partir dos dias estudados.
  * Lenha: +1 a cada 7 dias seguidos (máx. 2). Um dia em branco queima 1 lenha no lugar de zerar.
  * Hoje ainda não estudado não quebra a sequência.
+ * Dias de descanso planejado (`restDays`) sem estudo são pulados: não quebram nem gastam lenha.
  */
-export function computeStreak(studiedDays: Iterable<string>, today: string): StreakInfo {
+export function computeStreak(studiedDays: Iterable<string>, today: string, restDays?: Iterable<string>): StreakInfo {
   const set = new Set(studiedDays);
+  const rest = new Set(restDays ?? []);
   const sorted = [...set].filter((d) => d <= today).sort();
   if (!sorted.length) return { streak: 0, firewood: 0, burned: [], studiedToday: false };
   let streak = 0;
@@ -61,8 +63,8 @@ export function computeStreak(studiedDays: Iterable<string>, today: string): Str
         sinceWood = 0;
         firewood = Math.min(2, firewood + 1);
       }
-    } else if (d === today) {
-      // o dia ainda não acabou
+    } else if (d === today || rest.has(d)) {
+      // o dia ainda não acabou / descanso planejado
     } else if (firewood > 0) {
       firewood--;
       burned.push(d);
