@@ -77,6 +77,8 @@ function config(): NextAuthConfig {
       },
       jwt({ token, user }) {
         if (user?.id) token.sub = user.id;
+        // A foto pode ser um data URL grande: não vai no cookie da sessão.
+        delete token.picture;
         return token;
       },
       session({ session, token }) {

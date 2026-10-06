@@ -51,7 +51,7 @@ export function FocusNotesList({ groups }: { groups: Groups }) {
               <li key={n.id} className={cn("flex items-start gap-2 rounded-xl p-2", n.kind === "insight" ? "bg-amber-50 dark:bg-amber-500/10" : "bg-muted/60")}>
                 <span>{n.kind === "insight" ? "📌" : n.kind === "audio" ? "🎙️" : n.kind === "check" ? (n.done ? "✅" : "⬜") : "📝"}</span>
                 {n.kind === "audio" ? (
-                  <audio controls src={n.audio ?? undefined} className="h-8 flex-1" />
+                  <audio controls preload="none" src={n.audio ?? undefined} className="h-8 flex-1" />
                 ) : (
                   <p className={cn("flex-1 whitespace-pre-wrap", n.kind === "check" && n.done && "text-muted-foreground line-through")}>{n.text}</p>
                 )}

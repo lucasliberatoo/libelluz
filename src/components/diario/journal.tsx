@@ -103,7 +103,7 @@ export function Journal({ entries, today }: { entries: JournalEntry[]; today: st
             <li key={e.day} className="card-inner flex flex-col gap-3 p-4 sm:flex-row">
               {e.photo && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={e.photo} alt="" className="h-40 w-full shrink-0 rounded-xl object-cover sm:w-52" />
+                <img src={e.photo} alt="" loading="lazy" decoding="async" className="h-40 w-full shrink-0 rounded-xl object-cover sm:w-52" />
               )}
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-2 text-sm font-semibold">

@@ -13,8 +13,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) redirect("/entrar");
-  await ensureDailyLogin(userId);
-  const [shell, active] = await Promise.all([getShellData(userId), getActiveFocus(userId)]);
+  // o XP do login entra antes de somar as moedas do topo; a sessão de foco vem em paralelo
+  const [shell, active] = await Promise.all([ensureDailyLogin(userId).then(() => getShellData(userId)), getActiveFocus(userId)]);
   const serverNow = active?.pausedAt ?? nowMs();
   return (
     <FocusProvider initial={active} serverNow={serverNow}>

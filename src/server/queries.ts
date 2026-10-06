@@ -1,9 +1,11 @@
 import "server-only";
-import { and, asc, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
+import { cache } from "react";
+import { and, asc, desc, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { addDays, dayOf, weekStart, weekdayOf, WEEKDAYS } from "@/lib/day";
 import { computeStreak, computeStudyMode } from "@/lib/game";
 import { levelFromXp } from "@/lib/levels";
+import { avatarUrl } from "@/lib/avatar";
 import { getTodayPlan, restDaysOf } from "./schedule";
 
 const { users, focusSessions, xpEvents, dailyTasks, habitLogs, studyNodes } = schema;
@@ -21,7 +23,7 @@ export type ActiveFocus = {
   pausedMs: number;
 };
 
-export async function getActiveFocus(userId: string): Promise<ActiveFocus | null> {
+export const getActiveFocus = cache(async (userId: string): Promise<ActiveFocus | null> => {
   const s = await getDb().query.focusSessions.findFirst({
     where: and(eq(focusSessions.userId, userId), isNull(focusSessions.endedAt)),
     orderBy: (f, { desc }) => desc(f.startedAt),
@@ -39,10 +41,10 @@ export async function getActiveFocus(userId: string): Promise<ActiveFocus | null
     pausedAt: s.pausedAt?.getTime() ?? null,
     pausedMs: s.pausedMs,
   };
-}
+});
 
 /** Minutos de foco por dia (sessões encerradas). */
-export async function minutesByDay(userId: string, from?: string) {
+export const minutesByDay = cache(async (userId: string, from?: string) => {
   const rows = await getDb()
     .select({ day: focusSessions.day, min: sql<number>`coalesce(sum(${focusSessions.durationMin}), 0)`.mapWith(Number) })
     .from(focusSessions)
@@ -55,25 +57,24 @@ export async function minutesByDay(userId: string, from?: string) {
     )
     .groupBy(focusSessions.day);
   return new Map(rows.filter((r) => r.day && r.min > 0).map((r) => [r.day!, r.min]));
-}
+});
 
-export async function getUser(userId: string) {
-  return getDb().query.users.findFirst({ where: eq(users.id, userId) });
-}
+// cache(): várias partes da mesma página (layout + página) pedem os mesmos dados; busca uma vez só.
+export const getUser = cache(async (userId: string) => getDb().query.users.findFirst({ where: eq(users.id, userId) }));
 
-export async function totalXp(userId: string) {
+export const totalXp = cache(async (userId: string) => {
   const [r] = await getDb()
     .select({ xp: sql<number>`coalesce(sum(${xpEvents.amount}), 0)`.mapWith(Number) })
     .from(xpEvents)
     .where(eq(xpEvents.userId, userId));
   return r?.xp ?? 0;
-}
+});
 
 export async function getShellData(userId: string) {
   const today = dayOf();
   const [u, mins, xp] = await Promise.all([getUser(userId), minutesByDay(userId), totalXp(userId)]);
   const streak = computeStreak(mins.keys(), today, u ? restDaysOf(u, today) : undefined);
-  return { name: firstName(u?.name), image: u?.image ?? null, streak: streak.streak, xp };
+  return { name: firstName(u?.name), image: avatarUrl(userId, u?.image), streak: streak.streak, xp };
 }
 
 export const firstName = (n?: string | null) => (n ?? "").trim().split(/\s+/)[0] || "você";
@@ -168,7 +169,7 @@ export async function getDashboard(userId: string) {
     user: {
       name: u.name ?? "",
       firstName: firstName(u.name),
-      image: u.image,
+      image: avatarUrl(u.id, u.image),
       petName: u.petName,
       waterGoal: u.waterGoal,
       readingGoalMin: u.readingGoalMin,
@@ -252,11 +253,21 @@ export async function getTopicMinutes(userId: string) {
 
 /** Diário: humor, relato e foto de cada dia. */
 export async function getJournal(userId: string) {
-  const rows = await getDb().query.habitLogs.findMany({
-    where: eq(habitLogs.userId, userId),
-    orderBy: (h, { desc }) => desc(h.day),
-  });
-  return rows.map((r) => ({ day: r.day, mood: r.mood, journal: r.journal, photo: r.photo, water: r.waterCups, readingMin: r.readingMin, exercise: r.exercise }));
+  // Sem trazer as fotos (data URLs pesadas): cada uma é baixada sob demanda por /api/diario/foto/[dia].
+  const rows = await getDb()
+    .select({
+      day: habitLogs.day,
+      mood: habitLogs.mood,
+      journal: habitLogs.journal,
+      photoLen: sql<number | null>`length(${habitLogs.photo})`,
+      water: habitLogs.waterCups,
+      readingMin: habitLogs.readingMin,
+      exercise: habitLogs.exercise,
+    })
+    .from(habitLogs)
+    .where(eq(habitLogs.userId, userId))
+    .orderBy(desc(habitLogs.day));
+  return rows.map(({ photoLen, ...r }) => ({ ...r, photo: photoLen ? `/api/diario/foto/${r.day}?v=${photoLen}` : null }));
 }
 
 export type JournalEntry = Awaited<ReturnType<typeof getJournal>>[number];
