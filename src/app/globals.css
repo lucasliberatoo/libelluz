@@ -157,3 +157,7 @@
   scrollbar-width: none;
   &::-webkit-scrollbar { display: none; }
 }
+
+@utility card-inner {
+  @apply rounded-2xl bg-[oklch(0.965_0.006_264)] text-card-foreground dark:bg-muted;
+}

@@ -99,3 +99,25 @@ export const stats = {
   groupSize: 6,
   recordHits: 132,
 };
+
+// XP ganho por dia na semana atual (Dom → Sáb); hoje = todayIndex.
+export const xpWeek = [
+  { d: "Dom", xp: 95 },
+  { d: "Seg", xp: 240 },
+  { d: "Ter", xp: 185 },
+  { d: "Qua", xp: 310 },
+  { d: "Qui", xp: 80 },
+  { d: "Sex", xp: 0 },
+  { d: "Sáb", xp: 0 },
+];
+
+// XP de hoje, hora a hora (para o gráfico "Dia").
+export const xpToday = [
+  { h: "8h", xp: 5 },
+  { h: "9h", xp: 20 },
+  { h: "10h", xp: 25 },
+  { h: "11h", xp: 0 },
+  { h: "14h", xp: 30 },
+];
+
+export const xpGoals = { day: 150, week: 1200 };
