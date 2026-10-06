@@ -36,3 +36,44 @@ self.addEventListener("fetch", (e) => {
   // Páginas: sempre rede (dados ao vivo); sem rede, tela offline.
   if (req.mode === "navigate") e.respondWith(fetch(req).catch(() => caches.match(OFFLINE)));
 });
+
+// ---- Web Push ----
+// O servidor manda { title, body, url, tag, id }. Ver src/server/push.ts.
+self.addEventListener("push", (e) => {
+  let d = {};
+  try {
+    d = e.data ? e.data.json() : {};
+  } catch {
+    d = { body: e.data ? e.data.text() : "" };
+  }
+  const url = d.url || "/notificacoes";
+  e.waitUntil(
+    self.registration.showNotification(d.title || "Libelluz", {
+      body: d.body || "",
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      tag: d.tag || "libelluz",
+      renotify: true,
+      data: { url, id: d.id || null },
+      lang: "pt-BR",
+    }),
+  );
+});
+
+// Tocar na notificação abre (ou foca) a página indicada.
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const url = new URL((e.notification.data && e.notification.data.url) || "/notificacoes", self.location.origin);
+  e.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if (new URL(c.url).origin === url.origin && "focus" in c) {
+          c.focus();
+          if ("navigate" in c) return c.navigate(url.href).catch(() => {});
+          return;
+        }
+      }
+      return self.clients.openWindow(url.href);
+    }),
+  );
+});

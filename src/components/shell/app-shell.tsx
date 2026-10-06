@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { createContext, useContext, useSyncExternalStore } from "react";
 import {
-  Bell,
   BookOpen,
   Home,
   Menu,
@@ -17,8 +16,9 @@ import {
 import { cn } from "@/lib/utils";
 import { Icon3D, Wordmark } from "@/components/brand";
 import { fmtClock, useFocus } from "@/components/focus/focus-provider";
+import { NotificationBell } from "@/components/notifications/bell";
 
-export type ShellUser = { name: string; image: string | null; streak: number; xp: number };
+export type ShellUser = { name: string; image: string | null; streak: number; xp: number; unread?: number };
 const UserCtx = createContext<ShellUser>({ name: "", image: null, streak: 0, xp: 0 });
 const useShellUser = () => useContext(UserCtx);
 const noop = () => () => {};
@@ -128,9 +128,7 @@ function TopNav() {
         <CoinBadge className="bg-amber-500/10" />
         <StreakBadge className="bg-orange-500/10" />
         <ThemeToggle />
-        <button aria-label="Notificações" className="grid size-9 place-items-center rounded-full hover:bg-accent">
-          <Bell className="size-5" />
-        </button>
+        <NotificationBell unread={useShellUser().unread ?? 0} />
         <Avatar className="ml-1" />
       </nav>
     </header>
@@ -146,9 +144,7 @@ function MobileHeader() {
         <p className="flex-1 font-semibold">Olá, {user.name}!</p>
         <CoinBadge className="bg-white/15" />
         <StreakBadge className="bg-white/15" />
-        <button aria-label="Notificações" className="grid size-9 place-items-center rounded-full hover:bg-white/15">
-          <Bell className="size-5" />
-        </button>
+        <NotificationBell unread={user.unread ?? 0} onHeader runtime />
       </div>
     </header>
   );

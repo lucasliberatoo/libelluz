@@ -1,10 +1,12 @@
 import { auth } from "@/auth";
 import { ProfileForm } from "@/components/perfil/profile-form";
 import { getUser } from "@/server/queries";
+import { NotificationSettings } from "@/components/notifications/notification-settings";
 
 export default async function ConfigPage() {
   const u = (await getUser((await auth())!.user!.id!))!;
   return (
+    <>
     <ProfileForm
       initial={{
         name: u.name ?? "",
@@ -18,5 +20,7 @@ export default async function ConfigPage() {
         weeklyXpGoal: u.weeklyXpGoal,
       }}
     />
+    <NotificationSettings initial={u.notifPrefs} />
+    </>
   );
 }
