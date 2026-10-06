@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import type { FeedItem, FeedPage } from "@/server/groups";
 import { addComment, createPost, deleteComment, deletePost, getComments, loadFeed, toggleReaction, type FeedComment } from "@/server/groups-actions";
 import { ago, Avatar, Empty, fmtDuration, joinNames, StreakLevel, useGroup, useMember } from "./parts";
+import { ACHIEVEMENT_BY_KEY } from "@/lib/achievements";
 
 export function Feed({ initial }: { initial: FeedPage }) {
   const [items, setItems] = useState(initial.items);
@@ -142,8 +143,10 @@ function SessionBody({ name, s }: { name: string; s: NonNullable<FeedItem["sessi
   );
 }
 
-/** Nome legível da conquista a partir da chave (o catálogo de conquistas pode trocar por um título). */
+/** Nome da conquista pelo catálogo; chave desconhecida vira texto legível. */
 function achievementLabel(key: string) {
+  const a = ACHIEVEMENT_BY_KEY.get(key);
+  if (a) return a.name;
   const t = key.replace(/[-_:.]+/g, " ").trim();
   return t ? t[0].toUpperCase() + t.slice(1) : "uma conquista";
 }
