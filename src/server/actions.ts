@@ -329,7 +329,9 @@ export async function addNode(parentId: string, name: string) {
     .select({ max: sql<number>`coalesce(max(${studyNodes.position}), -1)`.mapWith(Number) })
     .from(studyNodes)
     .where(eq(studyNodes.parentId, parentId));
-  await db.insert(studyNodes).values({ userId, parentId, level, area: parent.area, name: n, position: max + 1 });
+  // habilidade nova herda a fase do tópico
+  const phase = level === "skill" ? parent.phase : null;
+  await db.insert(studyNodes).values({ userId, parentId, level, area: parent.area, name: n, position: max + 1, phase });
   revalidatePath("/aulas");
 }
 
