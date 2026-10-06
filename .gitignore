@@ -22,3 +22,6 @@ _contexto/referencias/
 
 # Android gerado no CI pelo Capacitor
 /android/
+
+# worktrees locais dos agentes
+/.claude/

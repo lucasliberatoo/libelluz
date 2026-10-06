@@ -1,5 +1,6 @@
 import {
   boolean,
+  jsonb,
   date,
   index,
   integer,
@@ -34,6 +35,13 @@ export const users = pgTable("users", {
   questionsGoal: integer("questions_goal").notNull().default(30),
   dailyXpGoal: integer("daily_xp_goal").notNull().default(150),
   weeklyXpGoal: integer("weekly_xp_goal").notNull().default(900),
+  // Cronograma: minutos disponíveis por dia da semana (Dom..Sáb). 0 = sem estudo.
+  weekMinutes: jsonb("week_minutes").$type<number[]>().notNull().default([0, 180, 180, 180, 180, 180, 120]),
+  // Dia de descanso semanal (0 = domingo), null = nenhum. Não quebra a sequência.
+  restDay: integer("rest_day").default(0),
+  // Redação: "fixo" (sorteia no dia escolhido) ou "semana" (tema da semana, sorteado na segunda)
+  essayRhythm: text("essay_rhythm").notNull().default("semana"),
+  essayDay: integer("essay_day").notNull().default(6),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 
@@ -195,4 +203,213 @@ export const habitLogs = pgTable(
     exercise: boolean("exercise").notNull().default(false),
   },
   (t) => [primaryKey({ columns: [t.userId, t.day] })],
+);
+
+/* ---------- Cronograma (Fase 2) ---------- */
+
+// Bloco = tópico da árvore + duração, num dia. Sem horários.
+export const scheduleBlocks = pgTable(
+  "schedule_blocks",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    day: date("day").notNull(),
+    nodeId: text("node_id").references(() => studyNodes.id, { onDelete: "set null" }),
+    area: text("area").notNull(),
+    subject: text("subject").notNull(),
+    topic: text("topic").notNull(),
+    kind: text("kind", { enum: ["study", "review"] }).notNull().default("study"),
+    plannedMin: integer("planned_min").notNull(),
+    // minutos de foco já feitos neste bloco (o Foco preenche sozinho)
+    doneMin: real("done_min").notNull().default(0),
+    doneAt: timestamp("done_at", { mode: "date" }),
+    reviewId: text("review_id"),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("blocks_user_day_idx").on(t.userId, t.day)],
+);
+
+// Revisão espaçada de um tópico: 1 → 7 → 30 dias, ajustada pelo acerto.
+export const reviews = pgTable(
+  "reviews",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    nodeId: text("node_id").references(() => studyNodes.id, { onDelete: "cascade" }),
+    area: text("area").notNull(),
+    subject: text("subject").notNull(),
+    topic: text("topic").notNull(),
+    dueDay: date("due_day").notNull(),
+    step: integer("step").notNull().default(0), // 0 = 1ª revisão (1 dia), 1 = 7 dias, 2 = 30 dias, 3+ = manutenção
+    intervalDays: integer("interval_days").notNull().default(1),
+    lastAccuracy: integer("last_accuracy"),
+    doneAt: timestamp("done_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("reviews_user_due_idx").on(t.userId, t.dueDay)],
+);
+
+/* ---------- Simulados e ENEMs antigos ---------- */
+
+export const exams = pgTable("exams", {
+  id: id(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  kind: text("kind", { enum: ["simulado", "enem"] }).notNull(),
+  name: text("name").notNull(),
+  source: text("source"),
+  // ENEM antigo: chave da lista pré-cadastrada (ex.: "2023-regular-1")
+  enemKey: text("enem_key"),
+  url: text("url"),
+  materialId: text("material_id"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+export const examParts = pgTable(
+  "exam_parts",
+  {
+    examId: text("exam_id")
+      .notNull()
+      .references(() => exams.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    part: text("part", { enum: ["natureza", "matematica", "linguagens", "humanas", "redacao"] }).notNull(),
+    day: date("day").notNull(),
+    correct: integer("correct"), // de 45
+    total: integer("total").notNull().default(45),
+    minutes: integer("minutes"),
+    essayScore: integer("essay_score"), // 0–1000
+    competencies: jsonb("competencies").$type<number[]>(), // C1–C5 (0–200)
+  },
+  (t) => [primaryKey({ columns: [t.examId, t.part] })],
+);
+
+/* ---------- Redação ---------- */
+
+export const essayThemes = pgTable("essay_themes", {
+  id: id(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  axis: text("axis").notNull(), // educação, saúde, tecnologia, meio ambiente, sociedade, economia, cultura
+  source: text("source"),
+  notes: text("notes"),
+  status: text("status", { enum: ["stock", "drawn", "accepted", "done"] }).notNull().default("stock"),
+  passCount: integer("pass_count").notNull().default(0),
+  drawnAt: timestamp("drawn_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+export const essays = pgTable("essays", {
+  id: id(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  themeId: text("theme_id").references(() => essayThemes.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  day: date("day").notNull(),
+  score: integer("score"),
+  competencies: jsonb("competencies").$type<number[]>(),
+  errorTags: jsonb("error_tags").$type<string[]>().notNull().default([]),
+  comments: text("comments"),
+  text: text("text"),
+  photo: text("photo"),
+  materialId: text("material_id"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+/* ---------- Banco de questões ---------- */
+
+export const questions = pgTable(
+  "questions",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    area: text("area").notNull(),
+    subject: text("subject"),
+    topic: text("topic"),
+    nodeId: text("node_id").references(() => studyNodes.id, { onDelete: "set null" }),
+    statement: text("statement").notNull(),
+    images: jsonb("images").$type<string[]>().notNull().default([]),
+    alternatives: jsonb("alternatives").$type<string[]>().notNull().default([]),
+    answer: integer("answer"), // índice da alternativa correta
+    explanation: text("explanation"),
+    source: text("source"),
+    visibility: text("visibility", { enum: ["private", "group", "global"] }).notNull().default("private"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("questions_user_idx").on(t.userId)],
+);
+
+export const questionAttempts = pgTable(
+  "question_attempts",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    questionId: text("question_id")
+      .notNull()
+      .references(() => questions.id, { onDelete: "cascade" }),
+    correct: boolean("correct").notNull(),
+    at: timestamp("at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("attempts_user_q_idx").on(t.userId, t.questionId)],
+);
+
+/* ---------- Materiais (PDF, vídeo, áudio, links) ---------- */
+
+export const materials = pgTable(
+  "materials",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    kind: text("kind", { enum: ["pdf", "video", "audio", "image", "link", "book", "other"] }).notNull(),
+    // "aula" aparece em Aulas/Estrutura (no tópico); "material" na sub-aba Materiais
+    section: text("section", { enum: ["aula", "material"] }).notNull().default("material"),
+    area: text("area"),
+    subject: text("subject"),
+    nodeId: text("node_id").references(() => studyNodes.id, { onDelete: "set null" }),
+    url: text("url"), // link externo (YouTube, Drive…)
+    storageKey: text("storage_key"), // arquivo no R2
+    size: integer("size"),
+    mime: text("mime"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("materials_user_idx").on(t.userId)],
+);
+
+/* ---------- Notas da sessão de foco (nota, insight, áudio, checklist) ---------- */
+
+export const focusNotes = pgTable(
+  "focus_notes",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => focusSessions.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["note", "insight", "audio", "check"] }).notNull(),
+    text: text("text"),
+    // nota em áudio: data URL (webm/opus, poucos minutos)
+    audio: text("audio"),
+    done: boolean("done").notNull().default(false),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("focus_notes_session_idx").on(t.sessionId), index("focus_notes_user_idx").on(t.userId)],
 );
