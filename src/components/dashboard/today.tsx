@@ -6,10 +6,12 @@ import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis } from "rechar
 import { Camera, Check, Pencil, Play, Plus, RotateCcw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Foguinho, Icon3D } from "@/components/brand";
+import { StreakCard } from "@/components/pet/streak-card";
+import type { PetSummary } from "@/server/pet";
 import type { DashboardData } from "@/server/queries";
 import { addTask, deleteTask, setHabit, toggleTask } from "@/server/actions";
 
-const DashCtx = createContext<DashboardData | null>(null);
+const DashCtx = createContext<(DashboardData & { pet?: PetSummary | null }) | null>(null);
 const useDash = () => useContext(DashCtx)!;
 
 const areaColor: Record<string, string> = {
@@ -30,10 +32,10 @@ const fmtH = (n: number) => String(n).replace(".", ",");
 
 const TABS = ["Hoje", "Semana", "Jornada", "Ranking & Conquistas"] as const;
 
-export function Dashboard({ data }: { data: DashboardData }) {
+export function Dashboard({ data, pet }: { data: DashboardData; pet?: PetSummary | null }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Hoje");
   return (
-    <DashCtx.Provider value={data}>
+    <DashCtx.Provider value={{ ...data, pet }}>
     <div className="space-y-4 md:space-y-6">
       <ProgressHeader />
       <section className="card-soft relative p-3 md:p-5">
@@ -71,14 +73,19 @@ export function Dashboard({ data }: { data: DashboardData }) {
 }
 
 function PetPeek() {
-  const { streak } = useDash();
+  const { streak, pet } = useDash();
   return (
     <Link
       href="/foguinho"
       aria-label="Abrir seu foguinho"
       className="absolute -top-8 right-2 z-10 transition hover:-translate-y-1 hover:rotate-3 md:-top-10 md:right-3"
     >
-      <Foguinho stage={0} mood={streak.studiedToday ? "happy" : "sleepy"} className="size-14 -rotate-6 drop-shadow-md md:size-20" />
+      <Foguinho
+        stage={pet?.stage ?? 0}
+        mood={pet?.mood ?? (streak.studiedToday ? "happy" : "sleepy")}
+        accessory={pet?.accessory ?? null}
+        className="size-14 -rotate-6 drop-shadow-md md:size-20"
+      />
     </Link>
   );
 }
@@ -173,7 +180,7 @@ function TodayTab() {
         </div>
       </div>
       <div className="grid gap-3 md:col-span-12 md:grid-cols-3 md:gap-4 lg:col-span-3 lg:grid-cols-1 lg:content-start">
-        <StreakCard />
+        <DashStreakCard />
         <ReadingCard />
         <ExerciseCard />
       </div>
@@ -608,51 +615,9 @@ function JournalDialog({ mood, onMood, onClose }: { mood: number | null; onMood:
   );
 }
 
-const DAYS = ["D", "S", "T", "Q", "Q", "S", "S"];
-
-function StreakCard() {
-  const { streak, weekDots } = useDash();
-  return (
-    <section className="card-inner p-4 text-center">
-      <div className="flex items-center justify-between text-left">
-        <span className="text-xs font-semibold text-muted-foreground">Sequência</span>
-        <span title="Ganha 1 a cada 7 dias seguidos (máx. 2). Protege um dia em branco." className="flex items-center gap-1 rounded-full bg-card px-2 py-0.5 text-xs font-medium">
-          <Icon3D name="emoji/lenha.webp" size={14} /> {streak.firewood} lenha
-        </span>
-      </div>
-      <Icon3D name="fogo.png" size={80} className={cn("mx-auto my-2 transition", !streak.studiedToday && "opacity-50 grayscale-[0.4]")} />
-      <p className="text-xl font-extrabold">
-        {streak.streak} {streak.streak === 1 ? "dia seguido" : "dias seguidos"}
-      </p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        {streak.studiedToday ? "Foguinho aceso hoje! Mantenha o foco e ganhe XP." : "Estude um pouco hoje para não deixar o fogo apagar."}
-      </p>
-      {!streak.studiedToday && (
-        <Link href="/foco" className="mx-auto mt-3 block h-7 w-3/4 rounded-full bg-primary text-xs font-semibold leading-7 text-white hover:brightness-110">
-          Estudar agora
-        </Link>
-      )}
-      <div className="mt-3 flex justify-center gap-1">
-        {weekDots.map((w, i) => (
-          <span
-            key={i}
-            title={w === "firewood" ? "Protegido pela lenha" : w === "rest" ? "Descanso planejado" : undefined}
-            className={cn(
-              "grid size-7 place-items-center rounded-full text-[11px] font-bold",
-              w === "studied" && "bg-primary text-primary-foreground",
-              w === "today" && "bg-card text-primary ring-2 ring-primary",
-              w === "firewood" && "bg-amber-600 text-white",
-              w === "missed" && "bg-destructive/15 text-destructive",
-              w === "future" && "bg-card text-muted-foreground",
-              w === "rest" && "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-            )}
-          >
-            {DAYS[i]}
-          </span>
-        ))}
-      </div>
-    </section>
-  );
+function DashStreakCard() {
+  const { streak, weekDots, pet } = useDash();
+  return <StreakCard streak={streak} weekDots={weekDots} pet={pet} />;
 }
 
 function ReadingCard() {
