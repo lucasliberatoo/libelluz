@@ -1,0 +1,20 @@
+# deps
+node_modules/
+/.pnp
+.pnp.*
+# next
+/.next/
+/out/
+/build
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+.vercel
+.env*
+!.env.example
+*.tsbuildinfo
+next-env.d.ts
+# conteúdo de terceiros (uso pessoal, não versionar)
+_contexto/imagens/inspiracao/
+_contexto/referencias/
