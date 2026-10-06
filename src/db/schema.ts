@@ -564,3 +564,38 @@ export const notifications = pgTable(
   },
   (t) => [index("notifications_user_idx").on(t.userId, t.createdAt), uniqueIndex("notifications_dedupe_idx").on(t.userId, t.dedupe)],
 );
+
+/* ---------- Modo Disciplina (bloqueio de apps no APK) ---------- */
+
+// Uma linha por pessoa: os apps escolhidos e as regras dos tokens.
+export const disciplineSettings = pgTable("discipline_settings", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").notNull().default(false),
+  // [{ pkg: "com.instagram.android", label: "Instagram" }]
+  apps: jsonb("apps").$type<{ pkg: string; label: string }[]>().notNull().default([]),
+  baseTokens: integer("base_tokens").notNull().default(3),
+  minutesPerToken: integer("minutes_per_token").notNull().default(10),
+  blockNotifications: boolean("block_notifications").notNull().default(true),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+// Log de uso: um registro por token gasto. `clientId` é o id gerado no celular (evita duplicar
+// quando a fila é sincronizada duas vezes).
+export const tokenSpends = pgTable(
+  "token_spends",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    day: date("day").notNull(),
+    at: timestamp("at", { mode: "date" }).notNull().defaultNow(),
+    pkg: text("pkg").notNull(),
+    label: text("label").notNull(),
+    minutes: integer("minutes").notNull(),
+    clientId: text("client_id").notNull(),
+  },
+  (t) => [index("spends_user_day_idx").on(t.userId, t.day), uniqueIndex("spends_client_idx").on(t.userId, t.clientId)],
+);

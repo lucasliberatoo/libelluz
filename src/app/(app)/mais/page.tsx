@@ -15,6 +15,7 @@ const ITEMS = [
   { href: "/foco/notas", label: "Notas do foco", emoji: "📌" },
   { href: "/perfil", label: "Perfil", emoji: "🙂" },
   { href: "/config", label: "Configurações", emoji: "⚙️" },
+  { href: "/disciplina", label: "Modo Disciplina", emoji: "🔒" },
   { href: "/baixar", label: "Baixar o app", emoji: "📲" },
 ];
 
