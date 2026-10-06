@@ -59,20 +59,27 @@ export function Dashboard({
       <ProgressHeader />
       <section className="card-soft relative p-3 md:p-5">
         <PetPeek />
-        <div className="no-scrollbar -mx-3 mb-4 flex gap-2 overflow-x-auto px-3 pr-16 md:mx-0 md:px-0 md:pr-24">
+        <div className="mb-4 grid grid-cols-4 gap-1.5 md:flex md:gap-2 md:pr-24">
           {DASH_TABS.map((t) => (
             <button
               key={t}
               onClick={() => go(t)}
               aria-pressed={t === shown}
               className={cn(
-                "whitespace-nowrap rounded-full border-2 px-4 py-1 text-sm font-semibold transition-colors",
+                "min-w-0 whitespace-nowrap rounded-full border-2 px-1 py-1 text-[13px] font-semibold transition-colors md:px-4 md:text-sm",
                 t === shown
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-primary/70 bg-card text-primary hover:bg-accent",
               )}
             >
-              {t}
+              {t === "Ranking & Conquistas" ? (
+                <>
+                  <span className="md:hidden">Ranking</span>
+                  <span className="hidden md:inline">{t}</span>
+                </>
+              ) : (
+                t
+              )}
             </button>
           ))}
         </div>

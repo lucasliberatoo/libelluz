@@ -49,7 +49,7 @@ export function GroupsScreen({
               ))}
             </div>
           </div>
-          <nav className="no-scrollbar -mx-4 flex gap-1 overflow-x-auto px-4 md:mx-0 md:px-0" aria-label="Seções do grupo">
+          <nav className="grid grid-cols-4 gap-1 md:flex" aria-label="Seções do grupo">
             {GROUP_TABS.map((t) => (
               <Link
                 key={t.k}
@@ -57,11 +57,18 @@ export function GroupsScreen({
                 scroll={false}
                 aria-current={tab === t.k ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-semibold transition-colors",
+                  "flex min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-full px-1 py-1.5 text-[13px] font-semibold transition-colors md:gap-1.5 md:px-4 md:text-sm",
                   tab === t.k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-primary",
                 )}
               >
-                {t.label}
+                {t.k === "agora" ? (
+                  <>
+                    <span className="md:hidden">Agora</span>
+                    <span className="hidden md:inline">{t.label}</span>
+                  </>
+                ) : (
+                  t.label
+                )}
                 {t.k === "agora" && studyingCount > 0 && (
                   <span className={cn("rounded-full px-1.5 text-xs", tab === t.k ? "bg-white/25" : "bg-emerald-500 text-white")}>{studyingCount}</span>
                 )}
