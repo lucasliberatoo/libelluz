@@ -15,15 +15,15 @@ export function SectionTabs({ active }: { active: "questoes" | "simulados" }) {
     { key: "simulados", href: "/simulados", label: "Simulados" },
   ] as const;
   return (
-    <nav className="flex gap-2" aria-label="Questões e Simulados">
+    <nav className="flex w-fit gap-1 rounded-full bg-card p-1 shadow-sm ring-1 ring-border" aria-label="Questões e Simulados">
       {tabs.map((t) => (
         <Link
           key={t.key}
           href={t.href}
           aria-current={t.key === active ? "page" : undefined}
           className={cn(
-            "rounded-full border-2 px-4 py-1 text-sm font-semibold transition-colors",
-            t.key === active ? "border-primary bg-primary text-primary-foreground" : "border-primary/60 text-primary hover:bg-accent",
+            "rounded-full px-4 py-1.5 text-sm font-semibold transition-colors",
+            t.key === active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-primary",
           )}
         >
           {t.label}
