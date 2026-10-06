@@ -1,38 +1,44 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { createContext, useContext, useOptimistic, useState, useTransition } from "react";
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis } from "recharts";
-import { Check, Pencil, Play } from "lucide-react";
+import { Camera, Check, Pencil, Play, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Foguinho, Icon3D } from "@/components/brand";
-import { levelFromXp } from "@/lib/levels";
-import {
-  areaColor,
-  goalsToday,
-  hoursBySubject,
-  reviewsToday,
-  stats,
-  tasksToday,
-  todayIndex,
-  user,
-  week,
-  weekHours,
-  xpGoals,
-  xpToday,
-  xpWeek,
-} from "@/lib/mock";
+import type { DashboardData } from "@/server/queries";
+import { addTask, deleteTask, setHabit, toggleTask } from "@/server/actions";
+
+const DashCtx = createContext<DashboardData | null>(null);
+const useDash = () => useContext(DashCtx)!;
+
+const areaColor: Record<string, string> = {
+  Natureza: "bg-emerald-500",
+  Matemática: "bg-blue-500",
+  Linguagens: "bg-amber-500",
+  Humanas: "bg-rose-500",
+  Redação: "bg-violet-500",
+};
+const areaBar: Record<string, string> = {
+  Matemática: "var(--chart-1)",
+  Natureza: "var(--chart-2)",
+  Linguagens: "var(--chart-3)",
+  Humanas: "var(--chart-4)",
+  Redação: "var(--chart-5)",
+};
+const fmtH = (n: number) => String(n).replace(".", ",");
 
 const TABS = ["Hoje", "Semana", "Jornada", "Ranking & Conquistas"] as const;
 
-export function Dashboard() {
+export function Dashboard({ data }: { data: DashboardData }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Hoje");
   return (
+    <DashCtx.Provider value={data}>
     <div className="space-y-4 md:space-y-6">
       <ProgressHeader />
       <section className="card-soft relative p-3 md:p-5">
-        <Foguinho stage={2} className="pointer-events-none absolute -top-9 right-3 hidden size-20 -rotate-6 drop-shadow-md md:block" />
-        <div className="no-scrollbar -mx-3 mb-4 flex gap-2 overflow-x-auto px-3 md:mx-0 md:px-0 md:pr-24">
+        <PetPeek />
+        <div className="no-scrollbar -mx-3 mb-4 flex gap-2 overflow-x-auto px-3 pr-16 md:mx-0 md:px-0 md:pr-24">
           {TABS.map((t) => (
             <button
               key={t}
@@ -60,21 +66,40 @@ export function Dashboard() {
       </section>
       <StatsSection />
     </div>
+    </DashCtx.Provider>
+  );
+}
+
+function PetPeek() {
+  const { streak } = useDash();
+  return (
+    <Link
+      href="/foguinho"
+      aria-label="Abrir seu foguinho"
+      className="absolute -top-8 right-2 z-10 transition hover:-translate-y-1 hover:rotate-3 md:-top-10 md:right-3"
+    >
+      <Foguinho stage={0} mood={streak.studiedToday ? "happy" : "sleepy"} className="size-14 -rotate-6 drop-shadow-md md:size-20" />
+    </Link>
   );
 }
 
 function ProgressHeader() {
-  const lv = levelFromXp(user.totalXp);
+  const { level: lv, user, studiedDays, studyMode } = useDash();
   const pct = lv.levelSpan ? (lv.intoLevel / lv.levelSpan) * 100 : 100;
   return (
     <section className="card-soft flex flex-col gap-4 p-4 md:flex-row md:items-center md:gap-5 md:px-6">
       <div className="flex items-center gap-3">
-        <div className="grid size-14 shrink-0 place-items-center rounded-full bg-violet-200 text-xl font-bold text-violet-700 dark:bg-violet-500/30 dark:text-violet-200">
-          L
+        <div className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-full bg-violet-200 text-xl font-bold text-violet-700 dark:bg-violet-500/30 dark:text-violet-200">
+          {user.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={user.image} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
+          ) : (
+            (user.name[0] ?? "?").toUpperCase()
+          )}
         </div>
         <div>
           <p className="text-lg font-bold leading-tight">
-            <span className="hidden md:inline">Olá, {user.fullName}!</span>
+            <span className="hidden md:inline">Olá, {user.name}!</span>
             <span className="md:hidden">Seu progresso</span>
           </p>
           <p className="text-sm text-muted-foreground">
@@ -83,39 +108,43 @@ function ProgressHeader() {
         </div>
       </div>
       <div className="grid flex-1 grid-cols-3 gap-2 md:gap-3">
-        <Pill icon="moeda-xp.png" label="XP do nível">
+        <Pill icon="moeda-xp.png" tile="bg-amber-100 dark:bg-amber-500/25" label="XP do nível">
           <div className="w-full">
             <p className="text-xs font-bold tabular-nums">
               {lv.intoLevel}
-              <span className="font-normal text-muted-foreground">/{lv.levelSpan} XP</span>
+              <span className="font-normal text-muted-foreground">{lv.isMax ? " XP" : `/${lv.levelSpan} XP`}</span>
             </p>
             <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted">
               <div className="h-full rounded-full bg-xp" style={{ width: `${pct}%` }} />
             </div>
           </div>
         </Pill>
-        <Pill icon="calendario.png" label="dias estudando">
-          <p className="text-xl font-extrabold tabular-nums text-primary">{user.studiedDays}</p>
+        <Pill icon="calendario.png" tile="bg-primary" label="dias estudando">
+          <p className="text-xl font-extrabold tabular-nums text-primary">{studiedDays}</p>
         </Pill>
-        <Pill icon="gauge.png" label="Modo de estudo">
-          <p className="text-sm font-extrabold uppercase">{user.studyMode}</p>
+        <Pill icon="gauge.png" tile="bg-green-500" label="Modo de estudo">
+          <p className="text-sm font-extrabold uppercase">{studyMode}</p>
         </Pill>
       </div>
       <Link
         href="/foco"
         className="group flex items-center justify-center gap-2 rounded-2xl px-2 py-1 transition active:scale-95 md:flex-col md:gap-0.5"
       >
-        <Icon3D name="botao-foco.png" size={52} className="transition group-hover:-translate-y-0.5" />
+        <span className="grid size-16 place-items-center rounded-2xl bg-sky-200 shadow-inner dark:bg-sky-400/30">
+          <Icon3D name="botao-foco.png" size={46} className="transition group-hover:-translate-y-0.5" />
+        </span>
         <span className="text-xs font-extrabold uppercase tracking-wide">Modo Foco</span>
       </Link>
     </section>
   );
 }
 
-function Pill({ icon, label, children }: { icon: string; label: string; children: React.ReactNode }) {
+function Pill({ icon, tile, label, children }: { icon: string; tile: string; label: string; children: React.ReactNode }) {
   return (
     <div className="card-inner flex flex-col gap-1.5 p-2.5 md:flex-row md:items-center md:gap-3 md:p-3">
-      <Icon3D name={icon} size={34} />
+      <span className={cn("grid size-11 shrink-0 place-items-center rounded-xl", tile)}>
+        <Icon3D name={icon} size={30} />
+      </span>
       <div className="min-w-0 flex-1">
         {children}
         <p className="truncate text-[11px] text-muted-foreground">{label}</p>
@@ -127,16 +156,15 @@ function Pill({ icon, label, children }: { icon: string; label: string; children
 function TodayTab() {
   return (
     <div className="grid gap-3 md:grid-cols-12 md:gap-4">
-      <div className="md:col-span-4">
+      <div className="md:col-span-4 lg:col-span-3">
         <XpCard />
       </div>
-      <div className="space-y-3 md:col-span-5 md:space-y-4">
+      <div className="space-y-3 md:col-span-8 md:space-y-4 lg:col-span-6">
         <ContinueCard />
         <div className="grid gap-3 sm:grid-cols-2 md:gap-4">
           <TasksCard />
           <div className="space-y-3 md:space-y-4">
             <GoalsCard />
-            <ReviewsCard />
           </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 md:gap-4">
@@ -144,7 +172,7 @@ function TodayTab() {
           <MoodCard />
         </div>
       </div>
-      <div className="space-y-3 md:col-span-3 md:space-y-4">
+      <div className="grid gap-3 md:col-span-12 md:grid-cols-3 md:gap-4 lg:col-span-3 lg:grid-cols-1 lg:content-start">
         <StreakCard />
         <ReadingCard />
         <ExerciseCard />
@@ -166,17 +194,17 @@ function CardTitle({ icon, children, action }: { icon?: string; children: React.
 /* ---------- XP do dia / semana ---------- */
 
 function XpCard() {
-  const [range, setRange] = useState<"Dia" | "Semana">("Semana");
-  const lv = levelFromXp(user.totalXp);
-  const todayXp = xpWeek[todayIndex].xp;
-  const weekXp = xpWeek.reduce((s, d) => s + d.xp, 0);
+  const [range, setRange] = useState<"Dia" | "Semana">("Dia");
+  const { level: lv, xp, todayIndex } = useDash();
+  const todayXp = xp.week[todayIndex].xp;
+  const weekXp = xp.week.reduce((s, d) => s + d.xp, 0);
   const daysSoFar = todayIndex + 1;
   const value = range === "Dia" ? todayXp : weekXp;
-  const goal = range === "Dia" ? xpGoals.day : xpGoals.week;
+  const goal = range === "Dia" ? xp.goals.day : xp.goals.week;
   const pct = Math.min(1, value / goal);
   const r = 62;
   const c = 2 * Math.PI * r;
-  const data = range === "Dia" ? xpToday.map((x) => ({ k: x.h, xp: x.xp })) : xpWeek.map((x) => ({ k: x.d, xp: x.xp }));
+  const data = xp.week.map((x) => ({ k: x.d, xp: x.xp }));
   return (
     <section className="card-inner flex h-full flex-col p-4">
       <CardTitle
@@ -195,7 +223,7 @@ function XpCard() {
           </div>
         }
       >
-        XP {range === "Dia" ? "do dia" : "da semana"}
+        XP {range === "Dia" ? "de hoje" : "da semana"}
       </CardTitle>
 
       <div className="relative mx-auto my-1 size-40">
@@ -232,7 +260,7 @@ function XpCard() {
             />
             <Bar dataKey="xp" radius={[6, 6, 6, 6]} maxBarSize={22}>
               {data.map((d, i) => (
-                <Cell key={d.k} fill={range === "Semana" && i === todayIndex ? "var(--success)" : "var(--chart-1)"} />
+                <Cell key={d.k} fill={i === todayIndex ? "var(--success)" : "var(--chart-1)"} />
               ))}
             </Bar>
           </BarChart>
@@ -241,9 +269,11 @@ function XpCard() {
 
       <div className="mt-3 space-y-0.5 text-center text-sm">
         <p className="font-bold">{todayXp === 0 ? "Hora de começar!" : "Bora manter o ritmo!"}</p>
-        <p className="text-muted-foreground">
-          Faltam <b className="text-xp">{lv.levelSpan - lv.intoLevel} XP</b> para o nível {lv.level + 1}
-        </p>
+        {!lv.isMax && (
+          <p className="text-muted-foreground">
+            Faltam <b className="text-xp">{lv.levelSpan - lv.intoLevel} XP</b> para o nível {lv.level + 1}
+          </p>
+        )}
         <p className="text-muted-foreground">
           Média diária <b className="text-success">{Math.round(weekXp / daysSoFar)} XP</b>
         </p>
@@ -255,55 +285,73 @@ function XpCard() {
 /* ---------- Hoje ---------- */
 
 function ContinueCard() {
-  const t = tasksToday[0];
+  const { lastFocus } = useDash();
   return (
     <Link
-      href="/foco"
+      href={lastFocus ? `/foco?topic=${encodeURIComponent(lastFocus.topic)}` : "/foco"}
       className="group flex items-center gap-4 overflow-hidden rounded-2xl bg-gradient-to-r from-primary to-blue-400 p-4 text-white shadow-md"
     >
       <span className="grid size-12 shrink-0 place-items-center rounded-full bg-white/25 transition group-hover:scale-105">
         <Play className="size-6 fill-current" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium uppercase tracking-wide opacity-85">Continuar de onde parei</p>
-        <p className="truncate text-lg font-bold">{t.topic}</p>
-        <p className="text-sm opacity-90">
-          {t.subject} · {t.doneMin} de {t.hours * 60} min
-        </p>
+        <p className="text-xs font-medium uppercase tracking-wide opacity-85">{lastFocus ? "Continuar de onde parei" : "Primeira sessão"}</p>
+        <p className="truncate text-lg font-bold">{lastFocus?.topic ?? "Começar a estudar"}</p>
+        <p className="text-sm opacity-90">{lastFocus ? `${lastFocus.subject} · ${lastFocus.kind}` : "Escolha uma matéria e dê o play"}</p>
       </div>
     </Link>
   );
 }
 
 function TasksCard() {
+  const { tasks } = useDash();
+  const [opt, toggleOpt] = useOptimistic(tasks, (l, id: string) => l.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
+  const [, start] = useTransition();
+  const [title, setTitle] = useState("");
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const t = title.trim();
+    if (!t) return;
+    setTitle("");
+    start(() => addTask(t));
+  };
   return (
     <section className="card-inner p-3">
       <CardTitle icon="emoji/tarefas.webp">To do list</CardTitle>
       <ul className="space-y-1.5">
-        {tasksToday.map((t) => {
-          const pct = Math.min(1, t.doneMin / (t.hours * 60));
-          const done = pct >= 1;
-          return (
-            <li key={t.id}>
-              <Link href="/foco" className="flex items-center gap-2.5 rounded-xl bg-card p-2 shadow-sm transition hover:ring-1 hover:ring-primary/40">
-                <span className={cn("grid size-8 shrink-0 place-items-center rounded-lg text-white", areaColor[t.area])}>
-                  {done ? <Check className="size-4" /> : <span className="text-xs font-bold">{t.subject[0]}</span>}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[10px] text-muted-foreground">{t.subject}</p>
-                  <p className={cn("truncate text-[13px] font-semibold leading-tight", done && "text-muted-foreground line-through")}>{t.topic}</p>
-                  <p className="text-[10px] text-muted-foreground">{String(t.hours).replace(".", ",")} hora{t.hours > 1 ? "s" : ""}</p>
-                </div>
-              </Link>
-            </li>
-          );
-        })}
+        {opt.map((t) => (
+          <li key={t.id} className="group flex items-center gap-2.5 rounded-xl bg-card p-2 shadow-sm">
+            <button
+              aria-label={t.done ? "Desmarcar" : "Concluir"}
+              onClick={() => start(async () => { toggleOpt(t.id); await toggleTask(t.id); })}
+              className={cn(
+                "grid size-8 shrink-0 place-items-center rounded-lg text-white",
+                t.done ? "bg-success" : t.area ? areaColor[t.area] : "bg-muted-foreground/40",
+              )}
+            >
+              {t.done ? <Check className="size-4" /> : <span className="text-xs font-bold">{t.title[0]?.toUpperCase()}</span>}
+            </button>
+            <Link href={`/foco?topic=${encodeURIComponent(t.title)}`} className="min-w-0 flex-1">
+              <p className={cn("truncate text-[13px] font-semibold leading-tight", t.done && "text-muted-foreground line-through")}>{t.title}</p>
+              {t.plannedMin ? <p className="text-[10px] text-muted-foreground">{t.plannedMin} min</p> : null}
+            </Link>
+            <button aria-label="Apagar" onClick={() => start(() => deleteTask(t.id))} className="text-muted-foreground opacity-0 transition group-hover:opacity-100">
+              <X className="size-4" />
+            </button>
+          </li>
+        ))}
       </ul>
+      {!opt.length && <p className="px-1 text-xs text-muted-foreground">Nada ainda. Digite e dê enter.</p>}
+      <form onSubmit={submit} className="mt-2 flex items-center gap-1 rounded-xl bg-card px-2 ring-1 ring-border">
+        <Plus className="size-4 text-muted-foreground" />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nova tarefa…" className="h-9 flex-1 bg-transparent text-sm outline-none" />
+      </form>
     </section>
   );
 }
 
 function GoalsCard() {
+  const { goals: goalsToday } = useDash();
   return (
     <section className="card-inner p-3">
       <CardTitle icon="emoji/alvo.webp">Metas</CardTitle>
@@ -327,26 +375,14 @@ function GoalsCard() {
   );
 }
 
-function ReviewsCard() {
-  return (
-    <section className="card-inner p-3">
-      <CardTitle icon="emoji/revisao.webp">Revisões</CardTitle>
-      <ul className="space-y-1.5">
-        {reviewsToday.map((r) => (
-          <li key={r.id} className="flex items-center gap-2 text-xs">
-            <span className={cn("size-2.5 rounded-full", areaColor[r.area])} />
-            <span className="flex-1 font-medium">{r.topic}</span>
-            <span className="rounded-full bg-card px-2 py-0.5 text-[10px] text-muted-foreground">{r.label}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 function WaterCard() {
-  const [cups, setCups] = useState(3);
-  const goal = 6;
+  const { habit, user } = useDash();
+  const [cups, setCupsState] = useState(habit.water);
+  const goal = Math.min(user.waterGoal, 12);
+  const setCups = (n: number) => {
+    setCupsState(n);
+    void setHabit({ waterCups: n });
+  };
   return (
     <section className="card-inner p-3">
       <CardTitle icon="emoji/agua.webp" action={<span className="text-xs tabular-nums text-muted-foreground">{cups}/{goal}</span>}>
@@ -368,7 +404,7 @@ function WaterCard() {
   );
 }
 
-const MOODS = [
+export const MOODS = [
   { icon: "emoji/h1.webp", label: "Ótimo" },
   { icon: "emoji/h2.webp", label: "Bem" },
   { icon: "emoji/h3.webp", label: "Ok" },
@@ -377,10 +413,24 @@ const MOODS = [
 ];
 
 function MoodCard() {
-  const [mood, setMood] = useState<number | null>(1);
+  const { habit } = useDash();
+  const [mood, setMoodState] = useState<number | null>(habit.mood);
+  const [open, setOpen] = useState(false);
+  const setMood = (i: number) => {
+    setMoodState(i);
+    void setHabit({ mood: i });
+  };
   return (
     <section className="card-inner p-3">
-      <CardTitle icon="emoji/humor.webp" action={<button className="flex items-center gap-1 text-xs font-medium text-primary"><Pencil className="size-3" />Diário</button>}>
+      <CardTitle
+        icon="emoji/humor.webp"
+        action={
+          <button onClick={() => setOpen(true)} className="flex items-center gap-1 text-xs font-medium text-primary">
+            <Pencil className="size-3" />
+            {habit.journal || habit.photo ? "Relato ✓" : "Relato"}
+          </button>
+        }
+      >
         Humor do dia
       </CardTitle>
       <div className="flex justify-between">
@@ -395,82 +445,181 @@ function MoodCard() {
           </button>
         ))}
       </div>
+      <Link href="/diario" className="mt-2 block text-center text-[11px] font-medium text-muted-foreground hover:text-primary">
+        Ver meu diário e como tenho estado →
+      </Link>
+      {open && <JournalDialog mood={mood} onMood={setMood} onClose={() => setOpen(false)} />}
     </section>
+  );
+}
+
+/** Reduz a foto no navegador para caber no banco (JPEG ~1024px). */
+async function compressPhoto(file: File): Promise<string> {
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, 1024 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(bmp.width * scale);
+  c.height = Math.round(bmp.height * scale);
+  const ctx = c.getContext("2d")!;
+  ctx.fillStyle = "#fff"; // PNG transparente não vira fundo preto no JPEG
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(bmp, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", 0.78);
+}
+
+function JournalDialog({ mood, onMood, onClose }: { mood: number | null; onMood: (i: number) => void; onClose: () => void }) {
+  const { habit } = useDash();
+  const [text, setText] = useState(habit.journal);
+  const [photo, setPhoto] = useState<string | null>(habit.photo);
+  const [pending, start] = useTransition();
+  const save = () =>
+    start(async () => {
+      await setHabit({ journal: text, photo });
+      onClose();
+    });
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
+      <div className="card-soft w-full max-w-md space-y-3 p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center">
+          <h3 className="flex-1 text-lg font-bold">Como foi seu dia?</h3>
+          <button aria-label="Fechar" onClick={onClose} className="text-muted-foreground">
+            <X className="size-5" />
+          </button>
+        </div>
+        <div className="flex justify-between">
+          {MOODS.map((m, i) => (
+            <button key={m.label} onClick={() => onMood(i)} className={cn("rounded-xl p-1.5 transition", mood === i ? "scale-110 bg-accent" : "opacity-55")}>
+              <Icon3D name={m.icon} size={32} alt={m.label} />
+            </button>
+          ))}
+        </div>
+        <textarea
+          autoFocus
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={5}
+          maxLength={5000}
+          placeholder="Um pequeno relato do dia…"
+          className="w-full rounded-xl border bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-primary"
+        />
+        {photo ? (
+          <div className="relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={photo} alt="Foto do dia" className="max-h-56 w-full rounded-xl object-cover" />
+            <button onClick={() => setPhoto(null)} className="absolute right-2 top-2 rounded-full bg-black/60 p-1 text-white" aria-label="Remover foto">
+              <X className="size-4" />
+            </button>
+          </div>
+        ) : (
+          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed py-4 text-sm text-muted-foreground hover:border-primary hover:text-primary">
+            <Camera className="size-4" /> Anexar uma foto
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (f) setPhoto(await compressPhoto(f));
+              }}
+            />
+          </label>
+        )}
+        <button onClick={save} disabled={pending} className="w-full rounded-full bg-primary py-2.5 font-bold text-white disabled:opacity-60">
+          {pending ? "Salvando…" : "Salvar relato"}
+        </button>
+      </div>
+    </div>
   );
 }
 
 const DAYS = ["D", "S", "T", "Q", "Q", "S", "S"];
 
 function StreakCard() {
+  const { streak, weekDots } = useDash();
   return (
     <section className="card-inner p-4 text-center">
       <div className="flex items-center justify-between text-left">
         <span className="text-xs font-semibold text-muted-foreground">Sequência</span>
-        <span className="flex items-center gap-1 rounded-full bg-card px-2 py-0.5 text-xs font-medium">
-          <Icon3D name="emoji/lenha.webp" size={14} /> {user.firewood} lenha
+        <span title="Ganha 1 a cada 7 dias seguidos (máx. 2). Protege um dia em branco." className="flex items-center gap-1 rounded-full bg-card px-2 py-0.5 text-xs font-medium">
+          <Icon3D name="emoji/lenha.webp" size={14} /> {streak.firewood} lenha
         </span>
       </div>
-      <Icon3D name="fogo.png" size={80} className="mx-auto my-2" />
-      <p className="text-xl font-extrabold">{user.streak} dias seguidos</p>
-      <p className="mt-1 text-xs text-muted-foreground">Mantenha o foco, alcance suas metas e ganhe XP.</p>
-      <Link href="/foco" className="mx-auto mt-3 block h-6 w-3/4 rounded-full bg-primary/80 text-xs font-semibold leading-6 text-white hover:bg-primary">
-        Estudar agora
-      </Link>
+      <Icon3D name="fogo.png" size={80} className={cn("mx-auto my-2 transition", !streak.studiedToday && "opacity-50 grayscale-[0.4]")} />
+      <p className="text-xl font-extrabold">
+        {streak.streak} {streak.streak === 1 ? "dia seguido" : "dias seguidos"}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {streak.studiedToday ? "Foguinho aceso hoje! Mantenha o foco e ganhe XP." : "Estude um pouco hoje para não deixar o fogo apagar."}
+      </p>
+      {!streak.studiedToday && (
+        <Link href="/foco" className="mx-auto mt-3 block h-7 w-3/4 rounded-full bg-primary text-xs font-semibold leading-7 text-white hover:brightness-110">
+          Estudar agora
+        </Link>
+      )}
       <div className="mt-3 flex justify-center gap-1">
-        {week.map((w, i) => (
+        {weekDots.map((w, i) => (
           <span
             key={i}
+            title={w === "firewood" ? "Protegido pela lenha" : undefined}
             className={cn(
               "grid size-7 place-items-center rounded-full text-[11px] font-bold",
-              w === true && "bg-primary text-primary-foreground",
-              w === false && i === todayIndex && "bg-success text-white",
-              w === false && i !== todayIndex && "bg-destructive/15 text-destructive",
-              w === null && "bg-card text-muted-foreground",
+              w === "studied" && "bg-primary text-primary-foreground",
+              w === "today" && "bg-card text-primary ring-2 ring-primary",
+              w === "firewood" && "bg-amber-600 text-white",
+              w === "missed" && "bg-destructive/15 text-destructive",
+              w === "future" && "bg-card text-muted-foreground",
             )}
           >
             {DAYS[i]}
           </span>
         ))}
       </div>
-      <div className="mt-4 flex items-center gap-2 rounded-xl bg-card p-2 text-left">
-        <Foguinho stage={2} className="size-10" />
-        <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1 text-xs font-semibold">
-            {user.petName} <Pencil className="size-3 text-muted-foreground" />
-          </p>
-          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
-            <div className="h-full w-[62%] rounded-full bg-gradient-to-r from-fuchsia-400 to-violet-600" />
-          </div>
-          <p className="mt-0.5 text-[10px] text-muted-foreground">Calor 62% · Labareda</p>
-        </div>
-      </div>
     </section>
   );
 }
 
 function ReadingCard() {
+  const { habit, user } = useDash();
+  const [min, setMin] = useState(habit.readingMin);
+  const goal = user.readingGoalMin || 30;
+  const add = (n: number) => {
+    const v = Math.max(0, min + n);
+    setMin(v);
+    void setHabit({ readingMin: v });
+  };
   return (
     <section className="card-inner flex items-center gap-3 p-3">
       <Icon3D name="livros.png" size={40} />
-      <div className="flex-1">
+      <div className="min-w-0 flex-1">
         <p className="text-[11px] text-muted-foreground">Leitura</p>
-        <p className="font-bold">20 / 30 minutos</p>
+        <p className="font-bold">
+          {min} / {goal} minutos
+        </p>
         <div className="mt-1 h-2 overflow-hidden rounded-full bg-card">
-          <div className="h-full w-2/3 rounded-full bg-violet-500" />
+          <div className="h-full rounded-full bg-violet-500 transition-all" style={{ width: `${Math.min(100, (min / goal) * 100)}%` }} />
         </div>
+      </div>
+      <div className="flex flex-col gap-1">
+        <button onClick={() => add(10)} className="rounded-full bg-card px-2 text-xs font-semibold ring-1 ring-border">+10</button>
+        <button onClick={() => add(-10)} className="rounded-full bg-card px-2 text-xs text-muted-foreground ring-1 ring-border">−10</button>
       </div>
     </section>
   );
 }
 
 function ExerciseCard() {
-  const [done, setDone] = useState(false);
+  const { habit } = useDash();
+  const [done, setDoneState] = useState(habit.exercise);
+  const setDone = (v: boolean) => {
+    setDoneState(v);
+    void setHabit({ exercise: v });
+  };
   return (
     <section className="card-inner flex items-center gap-3 p-3">
       <Icon3D name="emoji/exercicio.webp" size={36} />
       <div className="flex-1">
         <p className="text-[11px] text-muted-foreground">Exercício físico</p>
-        <p className="text-sm font-semibold">Dia de treino</p>
+        <p className="text-sm font-semibold">{done ? "Treino feito!" : "Treinou hoje?"}</p>
       </div>
       <button
         onClick={() => setDone(!done)}
@@ -485,22 +634,33 @@ function ExerciseCard() {
 /* ---------- Estatísticas ---------- */
 
 function StatsSection() {
-  const maxH = Math.max(...hoursBySubject.map((s) => s.h));
+  const { stats } = useDash();
+  const maxH = Math.max(0.1, ...stats.hoursByArea.map((s) => s.h));
   return (
     <section className="card-soft p-4 md:p-6">
       <h2 className="mb-4 text-xl font-bold">Estatísticas Gerais</h2>
       <div className="grid gap-3 md:grid-cols-12 md:gap-4">
         <div className="card-inner p-4 md:col-span-6">
-          <CardTitle icon="emoji/grafico.webp" action={<span className="text-xs font-semibold text-success">+{stats.weekVsLast}% vs semana passada</span>}>
+          <CardTitle
+            icon="emoji/grafico.webp"
+            action={
+              stats.weekVsLast !== null && (
+                <span className={cn("text-xs font-semibold", stats.weekVsLast >= 0 ? "text-success" : "text-destructive")}>
+                  {stats.weekVsLast >= 0 ? "+" : ""}
+                  {stats.weekVsLast}% vs semana passada
+                </span>
+              )
+            }
+          >
             Horas da semana
           </CardTitle>
           <div className="h-44">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={weekHours} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+              <BarChart data={stats.weekHours} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
                 <XAxis dataKey="d" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} />
                 <Tooltip
                   cursor={{ fill: "var(--muted)" }}
-                  formatter={(v) => [`${String(v).replace(".", ",")} h`, "Foco"]}
+                  formatter={(v) => [`${fmtH(Number(v))} h`, "Foco"]}
                   contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 12 }}
                 />
                 <Bar dataKey="h" fill="var(--chart-1)" radius={[6, 6, 6, 6]} maxBarSize={32} />
@@ -510,31 +670,35 @@ function StatsSection() {
         </div>
         <div className="card-inner p-4 md:col-span-6">
           <CardTitle icon="emoji/livro.webp">Horas por área (semana)</CardTitle>
-          <ul className="space-y-3">
-            {hoursBySubject.map((s) => (
-              <li key={s.name} className="text-sm">
-                <div className="mb-1 flex justify-between">
-                  <span>{s.name}</span>
-                  <span className="tabular-nums text-muted-foreground">{String(s.h).replace(".", ",")} h</span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-card">
-                  <div className="h-full rounded-full" style={{ width: `${(s.h / maxH) * 100}%`, background: s.color }} />
-                </div>
-              </li>
-            ))}
-          </ul>
+          {stats.hoursByArea.length ? (
+            <ul className="space-y-3">
+              {stats.hoursByArea.map((s) => (
+                <li key={s.name} className="text-sm">
+                  <div className="mb-1 flex justify-between">
+                    <span>{s.name}</span>
+                    <span className="tabular-nums text-muted-foreground">{fmtH(s.h)} h</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-card">
+                    <div className="h-full rounded-full" style={{ width: `${(s.h / maxH) * 100}%`, background: areaBar[s.name] ?? "var(--chart-1)" }} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">Sem sessões de foco nesta semana ainda.</p>
+          )}
           <p className="mt-3 flex items-center gap-1 text-xs text-muted-foreground">
             <Icon3D name="emoji/raio.webp" size={14} /> Natureza e Matemática rendem +20% de XP.
           </p>
         </div>
-        <BigStat className="md:col-span-4" icon="emoji/trofeu.webp" title="Recorde" value={String(stats.recordHits)} tone="text-amber-500">
-          Seu recorde histórico de acertos num simulado
+        <BigStat className="md:col-span-4" icon="emoji/trofeu.webp" title="Recorde" value={`${fmtH(stats.recordDayHours)}h`} tone="text-amber-500">
+          seu recorde de foco num dia
         </BigStat>
-        <BigStat className="md:col-span-4" icon="emoji/grupo.webp" title="Comparativo" value={`${stats.groupRank}º`} tone="text-success">
-          no grupo esta semana (de {stats.groupSize})
+        <BigStat className="md:col-span-4" icon="emoji/grupo.webp" title="Comparativo" value={stats.groupRank ? `${stats.groupRank}º` : "–"} tone="text-success">
+          {stats.groupRank ? `no grupo esta semana (de ${stats.groupSize})` : "estude esta semana para entrar no ranking"}
         </BigStat>
-        <BigStat className="md:col-span-4" icon="emoji/alvo.webp" title="Taxa de acerto" value={`${stats.accuracy}%`} tone="text-primary">
-          +{stats.accuracyDelta} p.p. nas últimas 2 semanas
+        <BigStat className="md:col-span-4" icon="emoji/alvo.webp" title="Taxa de acerto" value={stats.accuracy !== null ? `${stats.accuracy}%` : "–"} tone="text-primary">
+          {stats.accuracy !== null ? `${stats.questions14} questões nos últimos 14 dias` : "registre questões no fim do Foco"}
         </BigStat>
       </div>
     </section>

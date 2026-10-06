@@ -1,0 +1,95 @@
+name: APK Android
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "capacitor.config.ts"
+      - "capacitor-shell/**"
+      - "public/icon-512.png"
+      - "android-signing/**"
+      - ".github/workflows/apk.yml"
+  pull_request:
+    paths:
+      - "capacitor.config.ts"
+      - "capacitor-shell/**"
+      - "android-signing/**"
+      - ".github/workflows/apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # O Android SDK já vem instalado no runner ubuntu-latest (ANDROID_HOME).
+      - run: npm ci
+
+      - name: Gerar projeto Android (Capacitor)
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Ícone do app
+        run: |
+          command -v convert || (sudo apt-get update && sudo apt-get install -y imagemagick)
+          for pair in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+            d=${pair%%:*}; s=${pair##*:}
+            dir=android/app/src/main/res/mipmap-$d
+            convert public/icon-512.png -resize ${s}x${s} $dir/ic_launcher.png
+            convert public/icon-512.png -resize ${s}x${s} $dir/ic_launcher_round.png
+            fg=$(( s * 108 / 48 ))
+            convert public/icon-512.png -resize ${s}x${s} -background none -gravity center -extent ${fg}x${fg} $dir/ic_launcher_foreground.png
+          done
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26
+
+      - name: Compilar APK assinado
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+          BT=$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort -V | tail -1)
+          $BT/zipalign -f -p 4 app/build/outputs/apk/release/app-release-unsigned.apk aligned.apk
+          $BT/apksigner sign \
+            --ks ../android-signing/libelluz.keystore --ks-key-alias libelluz \
+            --ks-pass pass:libelluz-app --key-pass pass:libelluz-app \
+            --out ../libelluz.apk aligned.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libelluz-apk
+          path: libelluz.apk
+
+      # O repositório é privado: para os amigos baixarem, o APK também vai para o site (public/libelluz.apk).
+      - name: Publicar no site
+        if: github.event_name != 'pull_request'
+        run: |
+          cp libelluz.apk public/libelluz.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/libelluz.apk
+          git diff --cached --quiet || (git commit -m "APK atualizado" && git push)
+
+      - name: Publicar em "apk-latest"
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-latest
+          name: Libelluz para Android
+          body: APK mais recente do Libelluz. Instale no Android (permita "fontes desconhecidas").
+          files: libelluz.apk
+          make_latest: true

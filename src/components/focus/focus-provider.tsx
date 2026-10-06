@@ -1,6 +1,8 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { pauseFocus, resumeFocus, startFocus, stopFocus, type FocusResult } from "@/server/actions";
+import type { ActiveFocus } from "@/server/queries";
 
 export type StudyKind = "Teoria" | "Questões" | "Revisão" | "Videoaula" | "Flashcards" | "Redação";
 export type FocusMethod = "Cronometrado" | "Pomodoro" | "Livre";
@@ -11,92 +13,83 @@ export type FocusConfig = {
   topic: string;
   kind: StudyKind;
   method: FocusMethod;
-  minutes: number; // ignorado no Livre
+  minutes: number; // no Livre, só referência para sugerir pausa
 };
 
-export type FocusSession = FocusConfig & {
-  startedAt: number;
-  pausedAt: number | null;
-  pausedMs: number; // tempo pausado é descartado
-};
+/** Sessão em andamento. Os timestamps ficam no servidor: sobrevive a recarregar/fechar. */
+export type FocusSession = Omit<ActiveFocus, "kind" | "method"> & { kind: StudyKind; method: FocusMethod };
 
 type Ctx = {
   session: FocusSession | null;
   now: number;
   elapsedMs: number;
-  start: (c: FocusConfig) => void;
+  start: (c: FocusConfig) => Promise<void>;
   pause: () => void;
   resume: () => void;
-  stop: () => FocusSession | null;
+  stop: () => Promise<FocusResult | null>;
 };
 
 const FocusCtx = createContext<Ctx | null>(null);
-const KEY = "libelluz.focus";
 
-function load(): FocusSession | null {
-  try {
-    const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as FocusSession) : null;
-  } catch {
-    return null;
-  }
-}
-
-function save(s: FocusSession | null) {
-  try {
-    if (s) localStorage.setItem(KEY, JSON.stringify(s));
-    else localStorage.removeItem(KEY);
-  } catch {}
-}
-
-export function elapsedOf(s: FocusSession, now: number) {
+export function elapsedOf(s: Pick<FocusSession, "startedAt" | "pausedAt" | "pausedMs">, now: number) {
   return Math.max(0, (s.pausedAt ?? now) - s.startedAt - s.pausedMs);
 }
 
-export function FocusProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<FocusSession | null>(null);
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    setSession(load());
-  }, []);
+export function FocusProvider({
+  initial,
+  serverNow,
+  children,
+}: {
+  initial: ActiveFocus | null;
+  /** Mesmo "agora" no servidor e no cliente para não dar erro de hidratação. */
+  serverNow: number;
+  children: React.ReactNode;
+}) {
+  const [session, setSession] = useState<FocusSession | null>(initial as FocusSession | null);
+  const [now, setNow] = useState(serverNow);
 
   useEffect(() => {
     if (!session) return;
+    const tick = setTimeout(() => setNow(Date.now()), 0);
     const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
+    return () => {
+      clearTimeout(tick);
+      clearInterval(id);
+    };
   }, [session]);
 
-  const update = useCallback((s: FocusSession | null) => {
-    setSession(s);
-    save(s);
-    setNow(Date.now());
+  const start = useCallback(async (c: FocusConfig) => {
+    const t = Date.now();
+    setNow(t);
+    setSession({ ...c, id: "", startedAt: t, pausedAt: null, pausedMs: 0 });
+    const s = await startFocus(c);
+    setSession(s as FocusSession);
   }, []);
 
-  const start = useCallback(
-    (c: FocusConfig) => update({ ...c, startedAt: Date.now(), pausedAt: null, pausedMs: 0 }),
-    [update],
-  );
   const pause = useCallback(() => {
-    if (session && !session.pausedAt) update({ ...session, pausedAt: Date.now() });
-  }, [session, update]);
+    if (!session || session.pausedAt) return;
+    setSession({ ...session, pausedAt: Date.now() });
+    if (session.id) void pauseFocus(session.id);
+  }, [session]);
+
   const resume = useCallback(() => {
-    if (session?.pausedAt)
-      update({ ...session, pausedMs: session.pausedMs + (Date.now() - session.pausedAt), pausedAt: null });
-  }, [session, update]);
-  const stop = useCallback(() => {
-    const s = session ? { ...session, pausedAt: session.pausedAt ?? Date.now() } : null;
-    update(null);
-    return s;
-  }, [session, update]);
+    if (!session?.pausedAt) return;
+    const t = Date.now();
+    setNow(t);
+    setSession({ ...session, pausedMs: session.pausedMs + (t - session.pausedAt), pausedAt: null });
+    if (session.id) void resumeFocus(session.id);
+  }, [session]);
+
+  const stop = useCallback(async () => {
+    if (!session?.id) return null;
+    const id = session.id;
+    setSession(null);
+    return stopFocus(id);
+  }, [session]);
 
   const elapsedMs = session ? elapsedOf(session, now) : 0;
 
-  return (
-    <FocusCtx.Provider value={{ session, now, elapsedMs, start, pause, resume, stop }}>
-      {children}
-    </FocusCtx.Provider>
-  );
+  return <FocusCtx.Provider value={{ session, now, elapsedMs, start, pause, resume, stop }}>{children}</FocusCtx.Provider>;
 }
 
 export function useFocus() {

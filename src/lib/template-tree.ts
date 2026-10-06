@@ -1,0 +1,207 @@
+// Árvore inicial pré-carregada (editável por cada pessoa).
+// Base: checklist simplificado do Mapa de Progresso Competitivo + tópicos do ENEM que faltavam.
+
+export type Area = "Matemática" | "Natureza" | "Linguagens" | "Humanas" | "Redação";
+
+export const TEMPLATE_TREE: { area: Area; subjects: { name: string; topics: string[] }[] }[] = [
+  {
+    area: "Matemática",
+    subjects: [
+      {
+        name: "Matemática Básica",
+        topics: [
+          "Fundamentos da Matemática",
+          "Frações",
+          "MMC e MDC",
+          "Potenciação e Radiciação",
+          "Razão, Proporção e Regra de 3",
+          "Porcentagem",
+          "Notação Científica",
+          "Unidades de Medida e Conversões",
+          "Vazão",
+          "Escalas",
+          "Gráficos e Tabelas",
+          "Matemática Financeira Básica",
+        ],
+      },
+      {
+        name: "Álgebra",
+        topics: ["Fundamentos da Álgebra", "Sistemas e Equações", "Conjuntos", "Matrizes", "Inequações"],
+      },
+      {
+        name: "Funções",
+        topics: [
+          "Função do 1º grau",
+          "Função do 2º grau",
+          "Função Exponencial",
+          "Logaritmo",
+          "Função Logarítmica",
+          "Função Trigonométrica",
+        ],
+      },
+      { name: "Sequências", topics: ["Progressão Aritmética", "Progressão Geométrica"] },
+      { name: "Estatística e Probabilidade", topics: ["Estatística", "Análise Combinatória", "Probabilidade"] },
+      {
+        name: "Geometria",
+        topics: ["Geometria Plana", "Trigonometria", "Geometria Espacial", "Projeção Ortogonal", "Geometria Analítica"],
+      },
+      { name: "Matemática Financeira", topics: ["Juros Simples", "Juros Compostos", "Financiamentos"] },
+    ],
+  },
+  {
+    area: "Natureza",
+    subjects: [
+      {
+        name: "Biologia",
+        topics: [
+          "Bioquímica",
+          "Citologia",
+          "Metabolismo Energético",
+          "Divisão Celular",
+          "Genética",
+          "Biotecnologia",
+          "Evolução",
+          "Ecologia",
+          "Impactos Ambientais",
+          "Fisiologia Humana",
+          "Imunologia e Vacinas",
+          "Parasitoses",
+          "Botânica",
+          "Zoologia",
+          "Microbiologia e Vírus",
+        ],
+      },
+      {
+        name: "Física",
+        topics: [
+          "Grandezas e Unidades",
+          "Cinemática",
+          "Dinâmica (Leis de Newton)",
+          "Trabalho, Energia e Potência",
+          "Impulso e Quantidade de Movimento",
+          "Hidrostática",
+          "Gravitação",
+          "Termologia",
+          "Termodinâmica",
+          "Ondulatória",
+          "Acústica",
+          "Óptica",
+          "Eletrostática",
+          "Eletrodinâmica",
+          "Magnetismo e Indução",
+        ],
+      },
+      {
+        name: "Química",
+        topics: [
+          "Atomística",
+          "Tabela Periódica",
+          "Ligações Químicas",
+          "Funções Inorgânicas",
+          "Reações Químicas",
+          "Estequiometria",
+          "Soluções",
+          "Propriedades Coligativas",
+          "Termoquímica",
+          "Cinética Química",
+          "Equilíbrio Químico e pH",
+          "Eletroquímica",
+          "Radioatividade",
+          "Química Orgânica",
+          "Funções Orgânicas",
+          "Isomeria",
+          "Reações Orgânicas",
+          "Química Ambiental",
+        ],
+      },
+    ],
+  },
+  {
+    area: "Linguagens",
+    subjects: [
+      {
+        name: "Português",
+        topics: [
+          "Interpretação de Texto",
+          "Gêneros Textuais",
+          "Funções da Linguagem",
+          "Variação Linguística",
+          "Figuras de Linguagem",
+          "Coesão e Coerência",
+          "Gramática Contextualizada",
+        ],
+      },
+      {
+        name: "Literatura",
+        topics: ["Escolas Literárias", "Modernismo", "Literatura Contemporânea", "Análise de Poemas"],
+      },
+      { name: "Artes", topics: ["Movimentos Artísticos", "Arte Brasileira", "Arte Contemporânea"] },
+      { name: "Educação Física", topics: ["Práticas Corporais", "Corpo, Saúde e Sociedade"] },
+      { name: "Língua Estrangeira", topics: ["Inglês: Interpretação", "Espanhol: Interpretação"] },
+      { name: "Tecnologias da Informação", topics: ["Linguagem Digital e Mídias"] },
+    ],
+  },
+  {
+    area: "Humanas",
+    subjects: [
+      {
+        name: "História",
+        topics: [
+          "Antiguidade",
+          "Idade Média",
+          "Idade Moderna",
+          "Brasil Colônia",
+          "Brasil Império",
+          "República Velha",
+          "Era Vargas",
+          "Ditadura Militar",
+          "Redemocratização",
+          "Revoluções e Século XIX",
+          "Guerras Mundiais",
+          "Guerra Fria",
+          "História da África e Afro-brasileira",
+        ],
+      },
+      {
+        name: "Geografia",
+        topics: [
+          "Cartografia",
+          "Geologia e Relevo",
+          "Clima",
+          "Hidrografia",
+          "Biomas",
+          "Questões Ambientais",
+          "População",
+          "Urbanização",
+          "Agropecuária",
+          "Industrialização",
+          "Energia",
+          "Globalização e Geopolítica",
+        ],
+      },
+      {
+        name: "Filosofia",
+        topics: ["Filosofia Antiga", "Filosofia Medieval", "Filosofia Moderna", "Ética e Política", "Filosofia Contemporânea"],
+      },
+      {
+        name: "Sociologia",
+        topics: ["Clássicos da Sociologia", "Cultura e Identidade", "Trabalho e Sociedade", "Cidadania e Movimentos Sociais"],
+      },
+    ],
+  },
+  {
+    area: "Redação",
+    subjects: [
+      {
+        name: "Redação ENEM",
+        topics: [
+          "Competência 1: Norma culta",
+          "Competência 2: Tema e repertório",
+          "Competência 3: Argumentação",
+          "Competência 4: Coesão",
+          "Competência 5: Proposta de intervenção",
+        ],
+      },
+    ],
+  },
+];
