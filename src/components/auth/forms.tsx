@@ -7,10 +7,10 @@ import { googleAction, loginAction, signupAction } from "@/server/actions";
 const input = "w-full rounded-xl border bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary";
 const primaryBtn = "w-full rounded-full bg-primary py-3 font-bold text-primary-foreground shadow transition hover:brightness-105 disabled:opacity-60";
 
-function GoogleButton({ withInvite }: { withInvite?: boolean }) {
+function GoogleButton({ withInvite, invite = "" }: { withInvite?: boolean; invite?: string }) {
   return (
     <form action={googleAction} className="space-y-2">
-      {withInvite && <input name="invite" placeholder="Código de convite" className={input + " uppercase"} />}
+      {withInvite && (invite ? <input type="hidden" name="invite" value={invite} /> : <input name="invite" placeholder="Código de convite" className={input + " uppercase"} />)}
       <button className="flex w-full items-center justify-center gap-2 rounded-full border bg-card py-2.5 text-sm font-semibold hover:bg-muted">
         <svg viewBox="0 0 48 48" className="size-5" aria-hidden>
           <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
@@ -63,23 +63,25 @@ export function LoginForm({ google }: { google: boolean }) {
   );
 }
 
-export function SignupForm({ google, inviteError }: { google: boolean; inviteError?: boolean }) {
+export function SignupForm({ google, inviteError, invite = "" }: { google: boolean; inviteError?: boolean; invite?: string }) {
   const [state, action, pending] = useActionState(signupAction, undefined);
   return (
     <section className="card-soft p-6">
       <h1 className="text-lg font-bold">Criar conta</h1>
-      <p className="mb-4 text-sm text-muted-foreground">O Libelluz é só para convidados: peça um código ao Lucas.</p>
+      <p className="mb-4 text-sm text-muted-foreground">
+        {invite ? "Você foi convidado! 🎉 O código já está preenchido." : "O Libelluz é só para convidados: peça um código ao Lucas."}
+      </p>
       {inviteError && (
         <p className="mb-3 rounded-xl bg-destructive/10 p-2 text-sm text-destructive">Para criar conta com Google, digite um convite válido.</p>
       )}
       {google && (
         <>
-          <GoogleButton withInvite />
+          <GoogleButton withInvite invite={invite} />
           <Divider />
         </>
       )}
       <form action={action} className="space-y-3">
-        <input name="invite" placeholder="Código de convite" defaultValue={state?.values?.invite} className={input + " uppercase"} />
+        <input name="invite" placeholder="Código de convite" defaultValue={state?.values?.invite ?? invite} className={input + " uppercase"} />
         <input name="name" defaultValue={state?.values?.name} required autoComplete="name" placeholder="Seu nome" className={input} />
         <input name="email" type="email" required autoComplete="email" placeholder="E-mail" defaultValue={state?.values?.email} className={input} />
         <input name="password" type="password" required minLength={6} autoComplete="new-password" placeholder="Senha (mín. 6)" className={input} />

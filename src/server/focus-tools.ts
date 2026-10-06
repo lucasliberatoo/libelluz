@@ -109,7 +109,10 @@ export async function allFocusNotes() {
   const userId = await requireUser();
   const db = getDb();
   const rows = await db
-    .select({ note: focusNotes, s: { id: focusSessions.id, subject: focusSessions.subject, topic: focusSessions.topic, kind: focusSessions.kind, day: focusSessions.day } })
+    .select({
+      note: { id: focusNotes.id, kind: focusNotes.kind, text: focusNotes.text, done: focusNotes.done, createdAt: focusNotes.createdAt },
+      s: { id: focusSessions.id, subject: focusSessions.subject, topic: focusSessions.topic, kind: focusSessions.kind, day: focusSessions.day },
+    })
     .from(focusNotes)
     .innerJoin(focusSessions, eq(focusNotes.sessionId, focusSessions.id))
     .where(eq(focusNotes.userId, userId))
@@ -119,7 +122,8 @@ export async function allFocusNotes() {
   for (const r of rows) {
     let g = groups.at(-1);
     if (!g || g.session.id !== r.s.id) groups.push((g = { session: r.s, notes: [] }));
-    g.notes.push(toNote(r.note));
+    // o áudio não vem junto (é pesado): o player busca em /api/foco/audio/[id] só quando tocar
+    g.notes.push({ ...r.note, audio: r.note.kind === "audio" ? `/api/foco/audio/${r.note.id}` : null, createdAt: r.note.createdAt.getTime() });
   }
   return groups;
 }
