@@ -15,6 +15,13 @@
       "when": 1791256211176,
       "tag": "0001_diario_foto",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791258346512,
+      "tag": "0002_fase2",
+      "breakpoints": true
     }
   ]
 }

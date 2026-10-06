@@ -4,7 +4,8 @@ import { logoutAction } from "@/server/actions";
 import { ChevronRight } from "lucide-react";
 
 const ITEMS = [
-  { href: "/questoes", label: "Questões e Simulados", emoji: "📝" },
+  { href: "/questoes", label: "Questões", emoji: "📝" },
+  { href: "/simulados", label: "Simulados e ENEMs", emoji: "🎯" },
   { href: "/redacoes", label: "Redações", emoji: "✍️" },
   { href: "/cronograma", label: "Cronograma", emoji: "🗓️" },
   { href: "/mapa", label: "Mapa", emoji: "🗺️" },

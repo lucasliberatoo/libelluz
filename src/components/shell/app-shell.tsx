@@ -34,6 +34,7 @@ const DESKTOP_NAV = [
 ];
 
 function isActive(path: string, href: string) {
+  if (href === "/questoes" && path.startsWith("/simulados")) return true;
   return href === "/" ? path === "/" : path.startsWith(href);
 }
 
