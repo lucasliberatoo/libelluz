@@ -36,6 +36,13 @@
       "when": 1791264888725,
       "tag": "0004_fase3",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791279323650,
+      "tag": "0005_disciplina",
+      "breakpoints": true
     }
   ]
 }

@@ -9,7 +9,7 @@
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node scripts/migrate.mjs",
-    "test": "tsx src/lib/game.test.ts && tsx src/lib/schedule.test.ts && tsx src/lib/exams.test.ts && tsx src/lib/sigv4.test.ts && tsx src/lib/mapa.test.ts"
+    "test": "tsx src/lib/game.test.ts && tsx src/lib/schedule.test.ts && tsx src/lib/exams.test.ts && tsx src/lib/sigv4.test.ts && tsx src/lib/mapa.test.ts && tsx src/lib/tokens.test.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",
@@ -44,6 +44,7 @@
     "drizzle-kit": "^0.31.11",
     "eslint": "^9",
     "eslint-config-next": "16.3.8",
+    "libelluz-app-blocker": "file:android-plugins/app-blocker",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5"
