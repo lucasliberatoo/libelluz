@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { desc, isNull } from "drizzle-orm";
-import { BarChart3, ChevronRight, Download, LogOut, NotebookPen, Settings, Sparkles } from "lucide-react";
+import { BarChart3, ChevronRight, Download, LogOut, NotebookPen, Settings, Sparkles, Trophy } from "lucide-react";
 import { auth, isAdminEmail } from "@/auth";
 import { getDb, schema } from "@/db";
 import { Foguinho, Icon3D } from "@/components/brand";
@@ -39,6 +39,7 @@ export default async function PerfilPage() {
 
   const links = [
     { href: "/estatisticas", label: "Estatísticas completas", icon: BarChart3 },
+    { href: "/conquistas", label: "Conquistas", icon: Trophy },
     { href: "/config", label: "Metas e dados do perfil", icon: Settings },
     { href: "/diario", label: "Diário e humor", icon: NotebookPen },
     { href: "/foco/notas", label: "Notas do foco", icon: Sparkles },

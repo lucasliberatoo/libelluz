@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { createContext, useContext, useOptimistic, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { DASH_TABS, tabHref, type DashTab } from "./tabs";
+import { TabSkeleton } from "./tab-skeleton";
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { Camera, Check, Pencil, Play, Plus, RotateCcw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -30,10 +33,26 @@ const areaBar: Record<string, string> = {
 };
 const fmtH = (n: number) => String(n).replace(".", ",");
 
-const TABS = ["Hoje", "Semana", "Jornada", "Ranking & Conquistas"] as const;
-
-export function Dashboard({ data, pet }: { data: DashboardData; pet?: PetSummary | null }) {
-  const [tab, setTab] = useState<(typeof TABS)[number]>("Hoje");
+export function Dashboard({
+  data,
+  pet,
+  tab = "Hoje",
+  panel,
+}: {
+  data: DashboardData;
+  pet?: PetSummary | null;
+  tab?: DashTab;
+  panel?: React.ReactNode;
+}) {
+  // abas pela URL (?aba=): a aba aparece marcada na hora e o conteúdo chega do servidor
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [shown, setShown] = useOptimistic(tab);
+  const go = (t: DashTab) =>
+    start(() => {
+      setShown(t);
+      router.replace(tabHref(t), { scroll: false });
+    });
   return (
     <DashCtx.Provider value={{ ...data, pet }}>
     <div className="space-y-4 md:space-y-6">
@@ -41,13 +60,14 @@ export function Dashboard({ data, pet }: { data: DashboardData; pet?: PetSummary
       <section className="card-soft relative p-3 md:p-5">
         <PetPeek />
         <div className="no-scrollbar -mx-3 mb-4 flex gap-2 overflow-x-auto px-3 pr-16 md:mx-0 md:px-0 md:pr-24">
-          {TABS.map((t) => (
+          {DASH_TABS.map((t) => (
             <button
               key={t}
-              onClick={() => setTab(t)}
+              onClick={() => go(t)}
+              aria-pressed={t === shown}
               className={cn(
                 "whitespace-nowrap rounded-full border-2 px-4 py-1 text-sm font-semibold transition-colors",
-                t === tab
+                t === shown
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-primary/70 bg-card text-primary hover:bg-accent",
               )}
@@ -56,15 +76,7 @@ export function Dashboard({ data, pet }: { data: DashboardData; pet?: PetSummary
             </button>
           ))}
         </div>
-        {tab === "Hoje" ? (
-          <TodayTab />
-        ) : (
-          <div className="card-inner grid place-items-center p-12 text-center text-muted-foreground">
-            <p>
-              A aba <b className="text-foreground">{tab}</b> vem nas próximas etapas.
-            </p>
-          </div>
-        )}
+        {shown === "Hoje" ? <TodayTab /> : pending || shown !== tab ? <TabSkeleton /> : panel}
       </section>
       <StatsSection />
     </div>
