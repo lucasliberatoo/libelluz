@@ -1,10 +1,11 @@
 import { auth } from "@/auth";
+import { PrivacyForm } from "@/components/grupos/privacy-form";
 import { ProfileForm } from "@/components/perfil/profile-form";
 import { getUser } from "@/server/queries";
 
 export default async function ConfigPage() {
   const u = (await getUser((await auth())!.user!.id!))!;
-  return (
+  return (<>
     <ProfileForm
       initial={{
         name: u.name ?? "",
@@ -18,5 +19,6 @@ export default async function ConfigPage() {
         weeklyXpGoal: u.weeklyXpGoal,
       }}
     />
+    <PrivacyForm initial={u.privacy} /></>
   );
 }
