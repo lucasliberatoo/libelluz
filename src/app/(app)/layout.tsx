@@ -4,6 +4,7 @@ import { hasDatabase } from "@/db";
 import { nowMs } from "@/lib/day";
 import { FocusProvider } from "@/components/focus/focus-provider";
 import { AppShell } from "@/components/shell/app-shell";
+import { Celebrate } from "@/components/celebrate/celebrate";
 import { SetupNeeded } from "@/components/setup-needed";
 import { getActiveFocus, getShellData } from "@/server/queries";
 import { ensureDailyLogin } from "@/server/xp";
@@ -18,7 +19,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const serverNow = active?.pausedAt ?? nowMs();
   return (
     <FocusProvider initial={active} serverNow={serverNow}>
-      <AppShell user={shell}>{children}</AppShell>
+      <AppShell user={shell}>{children}<Celebrate userId={userId} /></AppShell>
     </FocusProvider>
   );
 }
